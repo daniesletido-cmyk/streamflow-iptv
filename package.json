@@ -1,0 +1,16 @@
+{
+  "name": "streamflow-iptv",
+  "version": "1.0.0",
+  "description": "Custom modern IPTV Player for PC, iPad and iPhone with Xtream Codes API",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": ["iptv", "xtream", "player", "pwa", "hls"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2"
+  }
+}
