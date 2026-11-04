@@ -227,6 +227,15 @@ function handleStreamProxy(targetUrl, req, res, redirectDepth = 0) {
     return res.status(508).send('Demasiadas redirecciones en el stream');
   }
 
+  // On serverless environments (like Vercel), avoid streaming timeouts by redirecting direct media
+  if (process.env.VERCEL) {
+    const isM3u8 = targetUrl.toLowerCase().includes('.m3u8');
+    if (!isM3u8) {
+      console.log(`[VERCEL STREAM] Redirigiendo 302 a: ${targetUrl}`);
+      return res.redirect(302, targetUrl);
+    }
+  }
+
   let parsedUrl;
   try {
     parsedUrl = new URL(targetUrl);
@@ -355,14 +364,18 @@ function getLocalIps() {
   return ips;
 }
 
-const server = app.listen(PORT, '0.0.0.0', () => {
-  const ips = getLocalIps();
-  console.log('\n======================================================');
-  console.log('   📺  STREAMFLOW IPTV - APP LISTA Y ACTIVA           ');
-  console.log('======================================================');
-  console.log(`💻 Acceso en este PC:        http://localhost:${PORT}`);
-  ips.forEach(ip => {
-    console.log(`📱 Acceso en iPhone / iPad:  http://${ip}:${PORT}`);
+if (require.main === module) {
+  const server = app.listen(PORT, '0.0.0.0', () => {
+    const ips = getLocalIps();
+    console.log('\n======================================================');
+    console.log('   📺  STREAMFLOW IPTV - APP LISTA Y ACTIVA           ');
+    console.log('======================================================');
+    console.log(`💻 Acceso en este PC:        http://localhost:${PORT}`);
+    ips.forEach(ip => {
+      console.log(`📱 Acceso en iPhone / iPad:  http://${ip}:${PORT}`);
+    });
+    console.log('======================================================\n');
   });
-  console.log('======================================================\n');
-});
+}
+
+module.exports = app;
