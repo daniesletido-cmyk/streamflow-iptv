@@ -369,8 +369,13 @@ function handleStreamProxy(targetUrl, req, res, redirectDepth = 0) {
       'Access-Control-Allow-Headers': '*',
       'Access-Control-Expose-Headers': 'Content-Length, Content-Range, Accept-Ranges',
       'Accept-Ranges': 'bytes',
-      'Cache-Control': 'no-cache, no-store, must-revalidate'
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'X-Accel-Buffering': 'no'
     };
+
+    if (res.socket) {
+      try { res.socket.setNoDelay(true); } catch (e) {}
+    }
 
     if (proxyRes.headers['content-type']) {
       responseHeaders['Content-Type'] = proxyRes.headers['content-type'];

@@ -272,10 +272,18 @@ class StreamPlayer {
     }, {
       enableWorker: false,
       lazyLoad: false,
-      liveBufferLatencyChasing: true,
-      liveBufferLatencyMaxLatency: 2.5,
-      liveBufferLatencyMinRemain: 0.5,
-      autoCleanupSourceBuffer: true
+      // Disable aggressive chasing which causes initial micro-stutter / forward jumping
+      liveBufferLatencyChasing: false,
+      liveBufferLatencyMaxLatency: 8.0,
+      liveBufferLatencyMinRemain: 2.5,
+      // 512KB initial stash buffer ensures stable GOP decoding without startup drops
+      enableStashBuffer: true,
+      stashInitialSize: 512 * 1024,
+      autoCleanupSourceBuffer: true,
+      autoCleanupMaxBackwardDuration: 30,
+      autoCleanupMinBackwardDuration: 15,
+      fixAudioTimestampGap: true,
+      accurateSeek: false
     });
 
     this.mpegtsPlayer.attachMediaElement(this.video);
@@ -295,12 +303,14 @@ class StreamPlayer {
   loadWithHls(url) {
     this.hls = new Hls({
       enableWorker: true,
-      lowLatencyMode: true,
+      lowLatencyMode: false,
       backBufferLength: 20,
-      maxBufferLength: 10,
-      maxMaxBufferLength: 20,
-      fragLoadingTimeOut: 6000,
-      manifestLoadingTimeOut: 6000
+      maxBufferLength: 15,
+      maxMaxBufferLength: 30,
+      fragLoadingTimeOut: 10000,
+      manifestLoadingTimeOut: 10000,
+      liveSyncDurationCount: 3,
+      liveMaxLatencyDurationCount: 6
     });
 
     this.hls.loadSource(url);
