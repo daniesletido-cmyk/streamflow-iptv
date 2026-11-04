@@ -130,10 +130,12 @@ const Api = {
 
   // Builds direct & proxied stream URLs
   getStreamUrls(profile, item, streamType = 'live') {
+    const origin = (typeof window !== 'undefined' && window.location?.origin) ? window.location.origin : '';
+
     if (item.direct_url) {
       return {
         hls: item.direct_url,
-        proxied: `/api/stream/proxy?url=${encodeURIComponent(item.direct_url)}`,
+        proxied: `${origin}/api/stream/proxy?url=${encodeURIComponent(item.direct_url)}`,
         direct: item.direct_url
       };
     }
@@ -157,10 +159,10 @@ const Api = {
         directLive: rawDirectLiveUrl,
         direct: rawDirectUrl,
         hls: rawHlsUrl,
-        proxiedDirectLive: `/api/stream/proxy?url=${encodeURIComponent(rawDirectLiveUrl)}`,
-        proxiedDirect: `/api/stream/proxy?url=${encodeURIComponent(rawDirectUrl)}`,
-        proxiedHls: `/api/stream/proxy?url=${encodeURIComponent(rawHlsUrl)}`,
-        proxiedBare: `/api/stream/proxy?url=${encodeURIComponent(rawBareUrl)}`
+        proxiedDirectLive: `${origin}/api/stream/proxy?url=${encodeURIComponent(rawDirectLiveUrl)}`,
+        proxiedDirect: `${origin}/api/stream/proxy?url=${encodeURIComponent(rawDirectUrl)}`,
+        proxiedHls: `${origin}/api/stream/proxy?url=${encodeURIComponent(rawHlsUrl)}`,
+        proxiedBare: `${origin}/api/stream/proxy?url=${encodeURIComponent(rawBareUrl)}`
       };
     } else if (streamType === 'vod' || streamType === 'movies') {
       rawDirectUrl = `${base}/movie/${user}/${pass}/${id}.${ext}`;
@@ -173,8 +175,8 @@ const Api = {
     return {
       hls: rawHlsUrl,
       direct: rawDirectUrl,
-      proxiedHls: `/api/stream/proxy?url=${encodeURIComponent(rawHlsUrl)}`,
-      proxiedDirect: `/api/stream/proxy?url=${encodeURIComponent(rawDirectUrl)}`
+      proxiedHls: `${origin}/api/stream/proxy?url=${encodeURIComponent(rawHlsUrl)}`,
+      proxiedDirect: `${origin}/api/stream/proxy?url=${encodeURIComponent(rawDirectUrl)}`
     };
   }
 };

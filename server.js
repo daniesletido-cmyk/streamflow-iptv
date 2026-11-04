@@ -299,6 +299,12 @@ function handleStreamProxy(targetUrl, req, res, redirectDepth = 0) {
     'Connection': 'keep-alive'
   };
 
+  const clientIp = (req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || req.socket?.remoteAddress || '').split(',')[0].trim();
+  if (clientIp) {
+    requestHeaders['X-Forwarded-For'] = clientIp;
+    requestHeaders['X-Real-IP'] = clientIp;
+  }
+
   if (req.headers.range) {
     requestHeaders['Range'] = req.headers.range;
   }

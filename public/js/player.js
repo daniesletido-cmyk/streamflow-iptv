@@ -149,12 +149,12 @@ class StreamPlayer {
         }
       }
     } else {
-      // VOD / Movies / Series: On iOS, direct stream from user's IP first
-      if (isIos && urls.direct) {
-        list.push({ engine: 'native', url: urls.direct, label: 'VOD Nativo iOS' });
-      }
+      // VOD / Movies / Series: Proxied direct first (guarantees Xtream Codes user-agent headers)
       if (urls.proxiedDirect) {
         list.push({ engine: 'native', url: urls.proxiedDirect, label: 'VOD Proxied' });
+      }
+      if (isIos && urls.direct) {
+        list.push({ engine: 'native', url: urls.direct, label: 'VOD Nativo iOS' });
       }
       if (urls.direct) {
         list.push({ engine: 'native', url: urls.direct, label: 'VOD Sin Proxy' });
@@ -179,14 +179,15 @@ class StreamPlayer {
 
     this.cleanupEngines();
 
-    // Guard timeout: if no video starts playing in 5.5s, switch to next option
+    // Guard timeout: dynamic per stream type (live channels 9s, movies/series 25s)
     this.clearConnectionTimeout();
+    const timeoutMs = (this.currentStreamType === 'live') ? 9000 : 25000;
     this.connectTimeout = setTimeout(() => {
       if (!this.isPlaying) {
-        console.warn(`[Player] Opción #${index + 1} (${strategy.label}) no comenzó en 5.5s. Pasando a la siguiente opción...`);
+        console.warn(`[Player] Opción #${index + 1} (${strategy.label}) no comenzó en ${timeoutMs/1000}s. Pasando a la siguiente opción...`);
         this.tryNextFallbackStrategy('Tiempo de espera agotado');
       }
-    }, 5500);
+    }, timeoutMs);
 
     try {
       if (strategy.engine === 'mpegts') {
@@ -208,7 +209,7 @@ class StreamPlayer {
       isLive: true,
       url: url
     }, {
-      enableWorker: true,
+      enableWorker: false,
       lazyLoad: false,
       liveBufferLatencyChasing: true,
       liveBufferLatencyMaxLatency: 2.5,
@@ -269,7 +270,10 @@ class StreamPlayer {
     if (next < this.strategies.length) {
       setTimeout(() => this.executeStrategy(next), 400);
     } else {
-      this.showBuffering('El canal no responde actualmente.');
+      const msg = (this.currentStreamType === 'live')
+        ? 'El canal no emite en directo en este momento (emisión apagada o evento no iniciado).'
+        : 'El contenido no responde en este momento. Inténtalo de nuevo más tarde.';
+      this.showBuffering(msg);
       this.stopWatchdog();
     }
   }
