@@ -21,6 +21,23 @@ const Storage = {
     }
   },
 
+  setCookieProfile(profile) {
+    try {
+      const val = encodeURIComponent(JSON.stringify(profile));
+      document.cookie = `streamflow_active_profile=${val}; path=/; max-age=315360000; SameSite=Lax`;
+    } catch (e) {}
+  },
+
+  getCookieProfile() {
+    try {
+      const match = document.cookie.match(/(?:^|;\s*)streamflow_active_profile=([^;]*)/);
+      if (match && match[1]) {
+        return JSON.parse(decodeURIComponent(match[1]));
+      }
+    } catch (e) {}
+    return null;
+  },
+
   saveProfile(profile) {
     const profiles = this.getProfiles();
     const existingIndex = profiles.findIndex(p => p.id === profile.id);
@@ -31,6 +48,7 @@ const Storage = {
       profiles.push(profile);
     }
     localStorage.setItem(this.KEYS.PROFILES, JSON.stringify(profiles));
+    this.setCookieProfile(profile);
     return profile;
   },
 
@@ -39,6 +57,7 @@ const Storage = {
     localStorage.setItem(this.KEYS.PROFILES, JSON.stringify(profiles));
     if (this.getActiveProfileId() === id) {
       localStorage.removeItem(this.KEYS.ACTIVE_PROFILE_ID);
+      document.cookie = 'streamflow_active_profile=; path=/; max-age=0;';
     }
   },
 
@@ -49,7 +68,17 @@ const Storage = {
       const found = profiles.find(p => p.id === activeId);
       if (found) return found;
     }
-    return profiles[0] || null;
+    if (profiles.length > 0) return profiles[0];
+
+    // Fallback: check 10-year persistent cookie
+    const fromCookie = this.getCookieProfile();
+    if (fromCookie) {
+      this.saveProfile(fromCookie);
+      this.setActiveProfileId(fromCookie.id);
+      return fromCookie;
+    }
+
+    return null;
   },
 
   setActiveProfileId(id) {

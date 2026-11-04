@@ -31,6 +31,18 @@ const App = {
 
     this.activeProfile = Storage.getActiveProfile();
     if (!this.activeProfile) {
+      try {
+        const sRes = await fetch('/api/saved-profile');
+        const sData = await sRes.json();
+        if (sData && sData.profile) {
+          Storage.saveProfile(sData.profile);
+          Storage.setActiveProfileId(sData.profile.id);
+          this.activeProfile = sData.profile;
+        }
+      } catch (e) {}
+    }
+
+    if (!this.activeProfile) {
       this.openLoginModal(true);
     } else {
       this.updateProfileUi();
@@ -902,6 +914,20 @@ const App = {
   openLoginModal(firstTime = false) {
     const modal = document.getElementById('loginModal');
     if (!modal) return;
+
+    // Prefill fields if a profile is already known
+    const current = this.activeProfile || Storage.getActiveProfile();
+    if (current) {
+      const nameInput = document.getElementById('loginName');
+      const serverInput = document.getElementById('loginServer');
+      const userInput = document.getElementById('loginUser');
+      const passInput = document.getElementById('loginPass');
+      if (nameInput && !nameInput.value) nameInput.value = current.name || '';
+      if (serverInput && !serverInput.value) serverInput.value = current.serverUrl || '';
+      if (userInput && !userInput.value) userInput.value = current.username || '';
+      if (passInput && !passInput.value) passInput.value = current.password || '';
+    }
+
     modal.classList.remove('hidden');
     this.renderProfilesList();
     const errBox = document.getElementById('loginError');
@@ -966,6 +992,13 @@ const App = {
       const saved = Storage.saveProfile(profile);
       Storage.setActiveProfileId(saved.id);
       this.activeProfile = saved;
+
+      // Persist to server for zero-relogin experience on all devices
+      fetch('/api/saved-profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ profile: saved })
+      }).catch(() => {});
 
       this.updateProfileUi();
       this.closeModals();

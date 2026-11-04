@@ -77,6 +77,50 @@ app.get('/api/info', (req, res) => {
   });
 });
 
+// Server-Side Persistent Profile Management (Permanent Storage across devices & restarts)
+const fs = require('fs');
+let inMemoryProfile = null;
+const PROFILE_FILE = process.env.VERCEL 
+  ? path.join('/tmp', 'streamflow_saved_profile.json') 
+  : path.join(__dirname, 'streamflow_saved_profile.json');
+
+function readServerProfile() {
+  if (inMemoryProfile) return inMemoryProfile;
+  try {
+    if (fs.existsSync(PROFILE_FILE)) {
+      const data = JSON.parse(fs.readFileSync(PROFILE_FILE, 'utf8'));
+      inMemoryProfile = data;
+      return data;
+    }
+  } catch (e) {}
+  return null;
+}
+
+function writeServerProfile(profile) {
+  inMemoryProfile = profile;
+  try {
+    fs.writeFileSync(PROFILE_FILE, JSON.stringify(profile, null, 2), 'utf8');
+  } catch (e) {
+    console.error('Error escribiendo perfil en servidor:', e.message);
+  }
+}
+
+app.get('/api/saved-profile', (req, res) => {
+  const profile = readServerProfile();
+  return res.json({ success: true, profile: profile || null });
+});
+
+app.post('/api/saved-profile', (req, res) => {
+  const { profile } = req.body || {};
+  if (profile && profile.username && profile.password) {
+    writeServerProfile(profile);
+    const cookieVal = encodeURIComponent(JSON.stringify(profile));
+    res.setHeader('Set-Cookie', `streamflow_active_profile=${cookieVal}; Path=/; Max-Age=315360000; SameSite=Lax`);
+    return res.json({ success: true, saved: true });
+  }
+  return res.json({ success: false });
+});
+
 // 1. Authentication
 app.post('/api/login', async (req, res) => {
   try {
