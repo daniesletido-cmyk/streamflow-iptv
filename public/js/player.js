@@ -25,6 +25,11 @@ class StreamPlayer {
     this.watchdogInterval = null;
     this.osdTimeout = null;
 
+    this.currentStreamType = 'live';
+    this.seriesContext = null;
+    this.lastProgressSave = 0;
+    this.resumeTime = null;
+
     this.initEvents();
   }
 
@@ -38,6 +43,27 @@ class StreamPlayer {
       this.retryCount = 0;
       this.updateStatus('En reproducción');
       this.hideBuffering();
+
+      // Check if we need to resume from saved timestamp
+      if (this.resumeTime && this.resumeTime > 0) {
+        try {
+          if (this.video.duration && this.resumeTime < this.video.duration) {
+            this.video.currentTime = this.resumeTime;
+          }
+        } catch (e) {}
+        this.resumeTime = null;
+      }
+    });
+
+    this.video.addEventListener('loadedmetadata', () => {
+      if (this.resumeTime && this.resumeTime > 0) {
+        try {
+          if (this.video.duration && this.resumeTime < this.video.duration) {
+            this.video.currentTime = this.resumeTime;
+          }
+        } catch (e) {}
+        this.resumeTime = null;
+      }
     });
 
     this.video.addEventListener('waiting', () => {
@@ -49,6 +75,10 @@ class StreamPlayer {
     this.video.addEventListener('pause', () => {
       this.isPlaying = false;
       this.updatePlayPauseBtn();
+      // Save progress on pause immediately
+      if (this.currentStreamType !== 'live' && this.video.duration > 0 && this.currentItem) {
+        Storage.savePlaybackProgress(this.currentItem, this.video.currentTime, this.video.duration, this.seriesContext);
+      }
     });
 
     this.video.addEventListener('error', (e) => {
@@ -59,6 +89,24 @@ class StreamPlayer {
     this.video.addEventListener('timeupdate', () => {
       if (this.video.currentTime > 0) {
         this.hideBuffering();
+      }
+
+      // Track continue watching for Movies & Series
+      if (this.currentStreamType !== 'live' && this.video.duration > 0 && this.currentItem) {
+        const now = Date.now();
+        if (now - this.lastProgressSave > 3000) {
+          this.lastProgressSave = now;
+          Storage.savePlaybackProgress(this.currentItem, this.video.currentTime, this.video.duration, this.seriesContext);
+        }
+      }
+    });
+
+    this.video.addEventListener('ended', () => {
+      if (this.currentStreamType !== 'live' && this.currentItem) {
+        Storage.markAsWatched(this.currentItem, true, this.seriesContext);
+        if (window.App && typeof window.App.showToast === 'function') {
+          window.App.showToast(`✓ Finalizado: ${this.currentItem.name || 'Vídeo'}`);
+        }
       }
     });
 
@@ -76,19 +124,32 @@ class StreamPlayer {
     }
   }
 
-  async play(item, profile, streamType = 'live') {
+  async play(item, profile, streamType = 'live', extra = {}) {
     this.cleanupEngines();
     this.clearConnectionTimeout();
     this.isLoading = true;
     this.isPlaying = false;
     this.currentItem = item;
+    this.currentStreamType = streamType;
+    this.seriesContext = extra;
+    this.lastProgressSave = 0;
+    this.resumeTime = null;
     this.retryCount = 0;
     this.currentStrategyIndex = 0;
     this.stopWatchdog();
 
+    // Check if this movie or series has a saved resume position
+    if (streamType !== 'live') {
+      const saved = Storage.getPlaybackProgress(item.stream_id || item.id || extra.episode_id);
+      if (saved && saved.currentTime > 10 && (saved.duration - saved.currentTime > 25)) {
+        this.resumeTime = saved.currentTime;
+        console.log(`[Player] Posición guardada encontrada: ${saved.currentTime}s (${saved.progress}%)`);
+      }
+    }
+
     document.getElementById('playerView').classList.remove('hidden');
     this.updatePlayerInfo(item);
-    this.showBuffering('Conectando canal...');
+    this.showBuffering(this.resumeTime ? `Reanudando desde ${this.formatTime(this.resumeTime)}...` : 'Conectando canal...');
     this.showOsdTemporarily(4000);
 
     const urls = Api.getStreamUrls(profile, item, streamType);
@@ -340,12 +401,21 @@ class StreamPlayer {
   }
 
   stop() {
+    if (this.currentStreamType !== 'live' && this.video && this.video.currentTime > 4 && this.currentItem) {
+      Storage.savePlaybackProgress(this.currentItem, this.video.currentTime, this.video.duration, this.seriesContext);
+    }
     this.clearConnectionTimeout();
     this.stopWatchdog();
     this.cleanupEngines();
     this.isPlaying = false;
     this.currentItem = null;
+    this.resumeTime = null;
     document.getElementById('playerView').classList.add('hidden');
+
+    if (window.App && typeof window.App.renderContinueWatching === 'function') {
+      window.App.renderContinueWatching();
+      window.App.refreshWatchedBadges();
+    }
   }
 
   togglePlayPause() {

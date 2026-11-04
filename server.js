@@ -38,6 +38,10 @@ function getCached(key) {
 }
 
 function setCache(key, data) {
+  if (apiCache.size > 40) {
+    const firstKey = apiCache.keys().next().value;
+    if (firstKey) apiCache.delete(firstKey);
+  }
   apiCache.set(key, { timestamp: Date.now(), data });
 }
 
@@ -379,6 +383,20 @@ function handleStreamProxy(targetUrl, req, res, redirectDepth = 0) {
 
     res.writeHead(proxyRes.statusCode, responseHeaders);
     proxyRes.pipe(res);
+
+    proxyRes.on('error', (err) => {
+      console.warn(`[STREAM PROXY] upstream error: ${err.message}`);
+      try { res.end(); } catch (e) {}
+    });
+
+    res.on('error', (err) => {
+      console.warn(`[STREAM PROXY] client response error: ${err.message}`);
+      try { proxyReq.destroy(); } catch (e) {}
+    });
+
+    res.on('close', () => {
+      try { proxyReq.destroy(); } catch (e) {}
+    });
   });
 
   proxyReq.on('error', (err) => {
@@ -389,7 +407,11 @@ function handleStreamProxy(targetUrl, req, res, redirectDepth = 0) {
   });
 
   req.on('close', () => {
-    proxyReq.destroy();
+    try { proxyReq.destroy(); } catch (e) {}
+  });
+
+  req.on('aborted', () => {
+    try { proxyReq.destroy(); } catch (e) {}
   });
 
   proxyReq.end();

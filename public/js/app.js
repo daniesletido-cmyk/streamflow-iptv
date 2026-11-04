@@ -183,6 +183,7 @@ const App = {
 
     this.updateSidebarShortcuts();
     await this.loadCurrentTab();
+    this.renderContinueWatching();
   },
 
   updateSidebarShortcuts() {
@@ -640,6 +641,7 @@ const App = {
   // Initialize and render first batch
   initStreamGrid() {
     this.updateCategoryToolbar();
+    this.renderContinueWatching();
     const grid = document.getElementById('streamGrid');
     if (!grid) return;
 
@@ -683,7 +685,10 @@ const App = {
 
     batch.forEach((item, i) => {
       const overallIndex = start + i;
-      const isFav = Storage.isFavorite(item.stream_id);
+      const targetId = String(item.stream_id || item.series_id);
+      const isFav = Storage.isFavorite(targetId);
+      const isWatched = Storage.isWatched(targetId);
+      const inProgress = Storage.getPlaybackProgress(targetId);
       const poster = item.stream_icon || item.cover || '';
 
       const card = document.createElement('div');
@@ -692,21 +697,42 @@ const App = {
       card.tabIndex = 0;
 
       card.innerHTML = `
-        <div class="stream-poster-wrap">
+        <div class="stream-poster-wrap relative">
           ${poster 
             ? `<img src="${poster}" alt="${item.name}" loading="lazy" decoding="async" class="stream-poster" onerror="this.onerror=null;this.src='/icons/icon.svg';">`
             : `<div class="stream-poster-placeholder"><span>${(item.name || 'TV').slice(0, 3).toUpperCase()}</span></div>`
           }
+
+          ${isWatched ? `
+            <div class="watched-indicator absolute top-2 left-2 z-10 flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-950/90 border border-emerald-500/60 text-emerald-300 text-[10px] font-bold shadow-lg backdrop-blur-sm pointer-events-none">
+              <svg class="w-3 h-3 text-emerald-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg>
+              <span>${isSeries ? 'Finalizada' : 'Vista'}</span>
+            </div>
+          ` : ''}
+
+          ${(inProgress && inProgress.progress > 0 && !isWatched) ? `
+            <div class="absolute bottom-0 left-0 right-0 h-1.5 bg-gray-900/80 z-10 overflow-hidden">
+              <div class="h-full bg-gradient-to-r from-cyan-400 to-indigo-500 rounded-full" style="width: ${inProgress.progress}%"></div>
+            </div>
+          ` : ''}
+
           <div class="stream-card-overlay">
             <button class="play-card-btn" title="Reproducir">
               <svg class="w-8 h-8" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
             </button>
           </div>
-          <button class="fav-star-btn ${isFav ? 'active' : ''}" data-fav-id="${item.stream_id}" title="Favorito">
+
+          <button class="fav-star-btn ${isFav ? 'active' : ''}" data-fav-id="${targetId}" title="Favorito">
             <svg class="w-5 h-5" fill="${isFav ? 'currentColor' : 'none'}" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/>
             </svg>
           </button>
+
+          ${(isVod || isSeries) ? `
+            <button class="watched-toggle-btn ${isWatched ? 'active text-emerald-400' : 'text-gray-400'} absolute bottom-2 right-2 z-20 p-1.5 rounded-lg bg-gray-900/80 hover:bg-gray-800 hover:text-emerald-300 border border-gray-700/60 backdrop-blur-sm transition-all" data-watched-id="${targetId}" title="${isWatched ? 'Marcar como no visto' : 'Marcar como visto'}">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+            </button>
+          ` : ''}
         </div>
         <div class="stream-card-details">
           <h3 class="stream-title" title="${item.name}">${item.name || 'Sin título'}</h3>
@@ -720,11 +746,25 @@ const App = {
           e.stopPropagation();
           this.toggleFavorite(item);
           const starBtn = card.querySelector('.fav-star-btn');
-          const isNowFav = Storage.isFavorite(item.stream_id);
+          const isNowFav = Storage.isFavorite(targetId);
           starBtn.classList.toggle('active', isNowFav);
           starBtn.querySelector('svg').setAttribute('fill', isNowFav ? 'currentColor' : 'none');
           return;
         }
+
+        if (e.target.closest('.watched-toggle-btn')) {
+          e.stopPropagation();
+          const nowWatched = Storage.toggleWatched(targetId, {
+            stream_type: isSeries ? 'series' : 'movie',
+            name: item.name || item.title,
+            cover: item.cover || item.stream_icon
+          });
+          this.refreshWatchedBadges();
+          this.renderContinueWatching();
+          this.showToast(nowWatched ? `✓ Marcado como visto: ${item.name}` : `Marcado como pendiente: ${item.name}`);
+          return;
+        }
+
         this.onStreamSelected(overallIndex);
       });
 
@@ -761,6 +801,138 @@ const App = {
       this.renderFavoritesSidebarCategories();
       this.initStreamGrid();
     }
+  },
+
+  renderContinueWatching() {
+    const section = document.getElementById('continueWatchingSection');
+    const slider = document.getElementById('continueWatchingSlider');
+    const badge = document.getElementById('continueWatchingBadge');
+    if (!section || !slider) return;
+
+    if (this.currentTab === 'live') {
+      section.classList.add('hidden');
+      return;
+    }
+
+    const filterType = (this.currentTab === 'vod') 
+      ? 'movie' 
+      : (this.currentTab === 'series') 
+        ? 'series' 
+        : null;
+
+    const items = Storage.getContinueWatching(filterType);
+    if (!items || items.length === 0) {
+      section.classList.add('hidden');
+      return;
+    }
+
+    section.classList.remove('hidden');
+    if (badge) badge.textContent = items.length;
+
+    slider.innerHTML = items.map(item => {
+      const poster = item.cover || item.stream_icon || '/icons/icon.svg';
+      const isSeries = item.stream_type === 'series' || item.series_id;
+      const subtitle = isSeries 
+        ? `${item.series_name || item.name} • T${item.season_num || 1}:E${item.episode_num || 1}`
+        : `${Math.round(item.currentTime / 60)} min / ${Math.round(item.duration / 60)} min`;
+      const title = isSeries ? (item.name || item.series_name) : item.name;
+
+      return `
+        <div class="continue-card flex-shrink-0 w-44 sm:w-52 bg-gray-900/90 hover:bg-gray-800/90 border border-gray-700/60 hover:border-cyan-500/50 rounded-xl overflow-hidden shadow-lg transition-all group relative cursor-pointer" data-continue-id="${item.id}">
+          <button class="remove-continue-btn absolute top-2 right-2 z-20 p-1 rounded-full bg-black/60 hover:bg-red-600/80 text-gray-300 hover:text-white transition-all" data-remove-id="${item.id}" title="Quitar de continuar viendo">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+          
+          <div class="relative w-full h-28 sm:h-32 bg-gray-950 overflow-hidden">
+            <img src="${poster}" alt="${title}" loading="lazy" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" onerror="this.src='/icons/icon.svg'">
+            <div class="absolute inset-0 bg-gradient-to-t from-gray-950 via-transparent to-black/30"></div>
+            
+            <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+              <div class="w-10 h-10 rounded-full bg-cyan-500/90 text-white flex items-center justify-center shadow-lg">
+                <svg class="w-5 h-5 ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+              </div>
+            </div>
+
+            <!-- Progress bar -->
+            <div class="absolute bottom-0 left-0 right-0 h-1.5 bg-gray-800">
+              <div class="h-full bg-gradient-to-r from-cyan-400 to-indigo-500" style="width: ${item.progress || 0}%"></div>
+            </div>
+          </div>
+
+          <div class="p-2.5">
+            <h4 class="text-xs sm:text-sm font-bold text-white truncate group-hover:text-cyan-300" title="${title}">${title}</h4>
+            <div class="flex items-center justify-between mt-1 text-[11px] text-gray-400">
+              <span class="truncate">${subtitle}</span>
+              <span class="font-semibold text-cyan-400 ml-1 shrink-0">${item.progress}%</span>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // Attach click listeners
+    slider.querySelectorAll('.continue-card').forEach(card => {
+      card.addEventListener('click', (e) => {
+        if (e.target.closest('.remove-continue-btn')) {
+          e.stopPropagation();
+          const removeId = card.getAttribute('data-continue-id');
+          Storage.removeContinueWatching(removeId);
+          this.renderContinueWatching();
+          return;
+        }
+
+        const id = card.getAttribute('data-continue-id');
+        const item = items.find(it => String(it.id) === String(id));
+        if (item) {
+          this.player.play(item, this.activeProfile, item.stream_type || 'movie', item);
+        }
+      });
+    });
+
+    const clearBtn = document.getElementById('clearContinueWatchingBtn');
+    if (clearBtn) {
+      clearBtn.onclick = () => {
+        if (confirm('¿Vaciar la lista de continuar viendo?')) {
+          items.forEach(it => Storage.removeContinueWatching(it.id));
+          this.renderContinueWatching();
+        }
+      };
+    }
+  },
+
+  refreshWatchedBadges() {
+    const cards = document.querySelectorAll('.stream-card');
+    cards.forEach(card => {
+      const idx = card.getAttribute('data-stream-index');
+      const item = this.filteredStreams ? this.filteredStreams[idx] : null;
+      if (!item) return;
+
+      const targetId = String(item.stream_id || item.series_id);
+      const isWatched = Storage.isWatched(targetId);
+      const existingBadge = card.querySelector('.watched-indicator');
+
+      if (isWatched && !existingBadge) {
+        const posterWrap = card.querySelector('.stream-poster-wrap');
+        if (posterWrap) {
+          const badge = document.createElement('div');
+          badge.className = 'watched-indicator absolute top-2 left-2 z-10 flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-950/90 border border-emerald-500/60 text-emerald-300 text-[10px] font-bold shadow-lg backdrop-blur-sm pointer-events-none';
+          badge.innerHTML = `
+            <svg class="w-3 h-3 text-emerald-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg>
+            <span>${this.currentTab === 'series' ? 'Finalizada' : 'Vista'}</span>
+          `;
+          posterWrap.appendChild(badge);
+        }
+      } else if (!isWatched && existingBadge) {
+        existingBadge.remove();
+      }
+
+      const watchBtn = card.querySelector('.watched-toggle-btn');
+      if (watchBtn) {
+        watchBtn.classList.toggle('active', isWatched);
+        watchBtn.classList.toggle('text-emerald-400', isWatched);
+        watchBtn.setAttribute('title', isWatched ? 'Marcar como no visto' : 'Marcar como visto');
+      }
+    });
   },
 
   nextChannel() {
@@ -859,16 +1031,45 @@ const App = {
         const eps = info.episodes[seasonNum] || [];
         episodesHtml += `
           <div class="mb-6">
-            <h4 class="text-lg font-bold text-cyan-400 mb-3 border-b border-gray-700 pb-1">Temporada ${seasonNum}</h4>
+            <h4 class="text-base font-bold text-cyan-400 mb-3 border-b border-gray-700/80 pb-1.5 flex items-center justify-between">
+              <span>Temporada ${seasonNum}</span>
+              <span class="text-xs text-gray-400 font-normal">${eps.length} capítulos</span>
+            </h4>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-              ${eps.map(ep => `
-                <div class="episode-card flex items-center justify-between p-3 rounded-lg bg-gray-800 hover:bg-gray-700 cursor-pointer" data-ep-id="${ep.id}" data-ep-ext="${ep.container_extension || 'mp4'}">
-                  <div>
-                    <span class="font-semibold text-white">E${ep.episode_num || ''} - ${ep.title || 'Episodio'}</span>
+              ${eps.map(ep => {
+                const epIdStr = String(ep.id);
+                const isEpWatched = Storage.isWatched(epIdStr);
+                const epProgress = Storage.getPlaybackProgress(epIdStr);
+
+                return `
+                <div class="episode-card relative flex items-center justify-between p-3 rounded-xl bg-gray-800/90 hover:bg-gray-750 border border-gray-700/60 hover:border-cyan-500/40 cursor-pointer transition-all overflow-hidden" data-ep-id="${ep.id}" data-ep-ext="${ep.container_extension || 'mp4'}" data-ep-num="${ep.episode_num || ''}" data-season-num="${seasonNum}">
+                  <div class="flex items-center gap-2.5 overflow-hidden pr-2">
+                    <span class="text-xs font-bold px-2 py-1 rounded bg-gray-700/80 text-cyan-300 shrink-0">E${ep.episode_num || ''}</span>
+                    <div class="overflow-hidden">
+                      <span class="font-semibold text-white text-sm truncate block">${ep.title || 'Episodio ' + (ep.episode_num || '')}</span>
+                      ${isEpWatched ? `
+                        <span class="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-400">✓ Visto</span>
+                      ` : (epProgress && epProgress.progress > 0) ? `
+                        <span class="inline-flex items-center gap-1 text-[11px] font-semibold text-cyan-400">En progreso (${epProgress.progress}%)</span>
+                      ` : ''}
+                    </div>
                   </div>
-                  <button class="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 rounded text-xs font-bold text-white">Ver</button>
+                  
+                  <div class="flex items-center gap-2 shrink-0">
+                    <button class="toggle-ep-watch-btn p-1.5 rounded-lg ${isEpWatched ? 'bg-emerald-950 text-emerald-400 border border-emerald-500/50' : 'bg-gray-700/70 text-gray-400 hover:text-emerald-300'} text-xs font-bold transition-all" data-ep-id="${ep.id}" title="${isEpWatched ? 'Marcar como no visto' : 'Marcar como visto'}">
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                    </button>
+                    <button class="play-ep-btn px-3 py-1.5 bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 rounded-lg text-xs font-bold text-white shadow transition-all">Ver</button>
+                  </div>
+
+                  ${(epProgress && epProgress.progress > 0 && !isEpWatched) ? `
+                    <div class="absolute bottom-0 left-0 right-0 h-1 bg-gray-700">
+                      <div class="h-full bg-cyan-400" style="width: ${epProgress.progress}%"></div>
+                    </div>
+                  ` : ''}
                 </div>
-              `).join('')}
+              `;
+              }).join('')}
             </div>
           </div>
         `;
@@ -894,14 +1095,39 @@ const App = {
         card.addEventListener('click', (e) => {
           const epId = card.getAttribute('data-ep-id');
           const ext = card.getAttribute('data-ep-ext');
-          const title = card.querySelector('.font-semibold').textContent;
+          const epNum = card.getAttribute('data-ep-num');
+          const sNum = card.getAttribute('data-season-num');
+          const title = card.querySelector('.font-semibold')?.textContent || 'Episodio';
+
+          if (e.target.closest('.toggle-ep-watch-btn')) {
+            e.stopPropagation();
+            const nowWatched = Storage.toggleWatched(epId, {
+              stream_type: 'series',
+              series_id: seriesItem.series_id,
+              episode_id: epId,
+              name: `${seriesItem.name} - E${epNum}`
+            });
+            this.openSeriesModal(seriesItem);
+            this.refreshWatchedBadges();
+            this.renderContinueWatching();
+            return;
+          }
+
           modal.classList.add('hidden');
           this.player.play({
             stream_id: epId,
             name: `${seriesItem.name} - ${title}`,
             container_extension: ext,
             stream_type: 'series'
-          }, this.activeProfile, 'series');
+          }, this.activeProfile, 'series', {
+            series_id: seriesItem.series_id,
+            series_name: seriesItem.name,
+            episode_id: epId,
+            season_num: sNum,
+            episode_num: epNum,
+            cover: seriesItem.cover,
+            container_extension: ext
+          });
         });
       });
 

@@ -8,7 +8,9 @@ const Storage = {
     ACTIVE_PROFILE_ID: 'streamflow_active_profile',
     FAVORITES: 'streamflow_favorites',
     RECENTS: 'streamflow_recents',
-    SETTINGS: 'streamflow_settings'
+    SETTINGS: 'streamflow_settings',
+    CONTINUE_WATCHING: 'streamflow_continue_watching',
+    WATCHED: 'streamflow_watched'
   },
 
   // 1. Profiles
@@ -248,7 +250,140 @@ const Storage = {
     localStorage.setItem(this.KEYS.RECENTS, JSON.stringify(recents));
   },
 
-  // 4. Global Settings
+  // 4. Continuar Viendo (Playback Progress for Movies & Series)
+  getContinueWatching(filterType = null) {
+    try {
+      const data = localStorage.getItem(this.KEYS.CONTINUE_WATCHING);
+      let list = data ? JSON.parse(data) : [];
+      if (!Array.isArray(list)) list = [];
+      if (!filterType || filterType === 'all') return list;
+      if (filterType === 'movie' || filterType === 'vod' || filterType === 'movies') {
+        return list.filter(item => item.stream_type === 'movie' || item.stream_type === 'vod' || item.stream_type === 'movies');
+      }
+      if (filterType === 'series') {
+        return list.filter(item => item.stream_type === 'series');
+      }
+      return list;
+    } catch (e) {
+      return [];
+    }
+  },
+
+  getPlaybackProgress(id) {
+    if (!id) return null;
+    const list = this.getContinueWatching();
+    return list.find(item => String(item.id || item.stream_id) === String(id)) || null;
+  },
+
+  savePlaybackProgress(item, currentTime, duration, extra = {}) {
+    if (!item || !duration || duration <= 30 || currentTime < 4) return;
+
+    const streamId = String(item.stream_id || item.id || extra.episode_id || '');
+    if (!streamId) return;
+
+    const progress = Math.min(100, Math.round((currentTime / duration) * 100));
+
+    // If watched >= 90% or within last 60 seconds, automatically mark as WATCHED / FINALIZADA
+    if (progress >= 90 || (duration - currentTime <= 60)) {
+      this.markAsWatched(streamId, true, {
+        stream_type: item.stream_type || extra.stream_type || 'movie',
+        name: item.name || item.title || extra.series_name,
+        series_id: extra.series_id,
+        episode_id: extra.episode_id,
+        cover: item.cover || item.stream_icon || extra.cover
+      });
+      this.removeContinueWatching(streamId);
+      return;
+    }
+
+    // Save in Continue Watching if progress >= 1.5%
+    if (progress >= 1.5) {
+      let list = this.getContinueWatching();
+      list = list.filter(it => String(it.id || it.stream_id) !== streamId);
+
+      const entry = {
+        id: streamId,
+        stream_id: item.stream_id || item.id,
+        name: item.name || item.title,
+        stream_icon: item.stream_icon || item.cover || extra.cover,
+        cover: item.cover || item.stream_icon || extra.cover,
+        stream_type: item.stream_type || extra.stream_type || 'movie',
+        container_extension: item.container_extension || extra.container_extension || 'mp4',
+        currentTime: Math.floor(currentTime),
+        duration: Math.floor(duration),
+        progress: progress,
+        series_id: extra.series_id || item.series_id,
+        episode_id: extra.episode_id,
+        season_num: extra.season_num,
+        episode_num: extra.episode_num,
+        series_name: extra.series_name,
+        last_watched: Date.now()
+      };
+
+      list.unshift(entry);
+      if (list.length > 50) list.pop();
+      localStorage.setItem(this.KEYS.CONTINUE_WATCHING, JSON.stringify(list));
+    }
+  },
+
+  removeContinueWatching(id) {
+    if (!id) return;
+    let list = this.getContinueWatching();
+    list = list.filter(item => String(item.id || item.stream_id) !== String(id));
+    localStorage.setItem(this.KEYS.CONTINUE_WATCHING, JSON.stringify(list));
+  },
+
+  // 5. Contenidos Vistos / Finalizados (Watched state)
+  getWatchedMap() {
+    try {
+      const data = localStorage.getItem(this.KEYS.WATCHED);
+      return data ? JSON.parse(data) : {};
+    } catch (e) {
+      return {};
+    }
+  },
+
+  isWatched(id) {
+    if (!id) return false;
+    const map = this.getWatchedMap();
+    return Boolean(map[String(id)]?.watched);
+  },
+
+  markAsWatched(itemOrId, isWatched = true, extra = {}) {
+    const id = typeof itemOrId === 'object' 
+      ? String(itemOrId.stream_id || itemOrId.id || itemOrId.series_id) 
+      : String(itemOrId);
+
+    if (!id) return;
+    const map = this.getWatchedMap();
+
+    if (isWatched) {
+      map[id] = {
+        watched: true,
+        watched_at: Date.now(),
+        stream_type: extra.stream_type || (typeof itemOrId === 'object' ? itemOrId.stream_type : 'movie'),
+        name: extra.name || (typeof itemOrId === 'object' ? (itemOrId.name || itemOrId.title) : ''),
+        series_id: extra.series_id,
+        episode_id: extra.episode_id
+      };
+      this.removeContinueWatching(id);
+    } else {
+      delete map[id];
+    }
+
+    localStorage.setItem(this.KEYS.WATCHED, JSON.stringify(map));
+  },
+
+  toggleWatched(itemOrId, extra = {}) {
+    const id = typeof itemOrId === 'object' 
+      ? String(itemOrId.stream_id || itemOrId.id || itemOrId.series_id) 
+      : String(itemOrId);
+    const currentlyWatched = this.isWatched(id);
+    this.markAsWatched(itemOrId, !currentlyWatched, extra);
+    return !currentlyWatched;
+  },
+
+  // 6. Global Settings
   getSettings() {
     try {
       const defaultSettings = {
