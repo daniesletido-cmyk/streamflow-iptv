@@ -42,7 +42,18 @@ function setCache(key, data) {
 }
 
 app.use(cors());
-app.use(express.json({ limit: '15mb' }));
+app.use((req, res, next) => {
+  if (req.body !== undefined && req.body !== null && typeof req.body === 'object') {
+    return next();
+  }
+  if (typeof req.body === 'string' && req.body.length > 0) {
+    try {
+      req.body = JSON.parse(req.body);
+      return next();
+    } catch (e) {}
+  }
+  express.json({ limit: '15mb' })(req, res, next);
+});
 
 app.use(express.static(path.join(__dirname, 'public'), {
   maxAge: '1h',
@@ -225,15 +236,6 @@ function handleStreamProxy(targetUrl, req, res, redirectDepth = 0) {
   if (redirectDepth > 6) {
     console.error(`[STREAM PROXY] Demasiadas redirecciones: ${targetUrl}`);
     return res.status(508).send('Demasiadas redirecciones en el stream');
-  }
-
-  // On serverless environments (like Vercel), avoid streaming timeouts by redirecting direct media
-  if (process.env.VERCEL) {
-    const isM3u8 = targetUrl.toLowerCase().includes('.m3u8');
-    if (!isM3u8) {
-      console.log(`[VERCEL STREAM] Redirigiendo 302 a: ${targetUrl}`);
-      return res.redirect(302, targetUrl);
-    }
   }
 
   let parsedUrl;
