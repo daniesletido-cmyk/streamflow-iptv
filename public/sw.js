@@ -1,4 +1,4 @@
-const CACHE_NAME = 'streamflow-cache-v1';
+const CACHE_NAME = 'streamflow-cache-v2';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -14,8 +14,9 @@ const ASSETS_TO_CACHE = [
 ];
 
 self.addEventListener('install', (event) => {
+  self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS_TO_CACHE)).then(() => self.skipWaiting())
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS_TO_CACHE))
   );
 });
 
@@ -32,11 +33,21 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  // Do not cache API proxy or video streams
+  // Never cache API or stream proxies
   if (event.request.url.includes('/api/')) {
     return;
   }
+
+  // Network first strategy for app code, cache fallback
   event.respondWith(
-    caches.match(event.request).then((cached) => cached || fetch(event.request))
+    fetch(event.request)
+      .then((networkResponse) => {
+        if (networkResponse && networkResponse.status === 200) {
+          const clone = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+        }
+        return networkResponse;
+      })
+      .catch(() => caches.match(event.request))
   );
 });
