@@ -110,11 +110,13 @@ class StreamPlayer {
 
     if (streamType === 'live') {
       if (isIos || (canNative && !window.Hls?.isSupported())) {
-        // iOS Safari prefers native HLS or proxied stream
-        if (urls.proxiedHls) list.push({ engine: 'native', url: urls.proxiedHls, label: 'iOS HLS Proxied' });
+        // iOS Safari / iPad: Direct native stream from user's IP first (bypasses cloud datacenter IP blocks)
         if (urls.hls) list.push({ engine: 'native', url: urls.hls, label: 'iOS HLS Directo' });
-        if (urls.proxiedDirectLive) list.push({ engine: 'native', url: urls.proxiedDirectLive, label: 'iOS TS Live' });
-        if (urls.proxiedDirect) list.push({ engine: 'native', url: urls.proxiedDirect, label: 'iOS TS Direct' });
+        if (urls.directLive) list.push({ engine: 'native', url: urls.directLive, label: 'iOS TS Directo' });
+        if (urls.direct) list.push({ engine: 'native', url: urls.direct, label: 'iOS Bare Directo' });
+        if (urls.proxiedHls) list.push({ engine: 'native', url: urls.proxiedHls, label: 'iOS HLS Proxied' });
+        if (urls.proxiedDirectLive) list.push({ engine: 'native', url: urls.proxiedDirectLive, label: 'iOS TS Live Proxied' });
+        if (urls.proxiedDirect) list.push({ engine: 'native', url: urls.proxiedDirect, label: 'iOS TS Direct Proxied' });
       } else {
         // PC & Android Chrome/Edge:
         // Strategy 1: mpegts.js with /live/ TS stream (official Xtream Codes standard)
@@ -147,8 +149,13 @@ class StreamPlayer {
         }
       }
     } else {
-      // VOD / Movies / Series
-      list.push({ engine: 'native', url: urls.proxiedDirect || urls.direct, label: 'VOD Directo' });
+      // VOD / Movies / Series: On iOS, direct stream from user's IP first
+      if (isIos && urls.direct) {
+        list.push({ engine: 'native', url: urls.direct, label: 'VOD Nativo iOS' });
+      }
+      if (urls.proxiedDirect) {
+        list.push({ engine: 'native', url: urls.proxiedDirect, label: 'VOD Proxied' });
+      }
       if (urls.direct) {
         list.push({ engine: 'native', url: urls.direct, label: 'VOD Sin Proxy' });
       }
