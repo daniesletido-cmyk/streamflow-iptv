@@ -242,10 +242,11 @@ const App = {
     document.querySelectorAll('.fav-sub-btn').forEach(b => {
       const match = b.getAttribute('data-fav-type') === this.activeFavSubTab;
       b.classList.toggle('active', match);
-      b.classList.toggle('text-cyan-300', match);
-      b.classList.toggle('bg-cyan-950/60', match);
-      b.classList.toggle('border-cyan-800/50', match);
-      b.classList.toggle('text-gray-400', !match);
+      b.classList.toggle('text-[#f4f6f9]', match);
+      b.classList.toggle('bg-[#161a22]', match);
+      b.classList.toggle('border', match);
+      b.classList.toggle('border-white/[0.12]', match);
+      b.classList.toggle('text-[#9aa4b2]', !match);
     });
 
     this.streams = Storage.getFavorites(this.activeFavSubTab);
@@ -414,13 +415,13 @@ const App = {
       html += `
         <div class="category-nav-item unified-special-btn ${isUnifiedActive ? 'active' : ''} focusable" data-unified-query="${query}">
           <div class="flex items-center gap-2 min-w-0">
-            <span class="text-base">${isSpain ? '🇪🇸' : '🎯'}</span>
+            <span class="text-sm shrink-0">${isSpain ? '🇪🇸' : '•'}</span>
             <div class="flex flex-col min-w-0">
-              <span class="category-nav-title font-extrabold text-cyan-300">TODO "${query.toUpperCase()}" (${categoriesToRender.length} grupos)</span>
-              <span class="text-[10px] text-gray-400">Ver y guardar todos juntos</span>
+              <span class="category-nav-title font-semibold text-sky-400">Todo "${query.toUpperCase()}" (${categoriesToRender.length})</span>
+              <span class="text-[11px] text-[#647082]">Ver grupos combinados</span>
             </div>
           </div>
-          <span class="category-nav-badge font-bold text-cyan-300 bg-cyan-950/80 border-cyan-800">${totalInMatching}</span>
+          <span class="category-nav-badge">${totalInMatching}</span>
         </div>
       `;
     }
@@ -429,9 +430,9 @@ const App = {
     if (!query) {
       html += `
         <div class="category-nav-item ${this.currentCategory === 'all' ? 'active' : ''} focusable" data-cat-id="all">
-          <div class="flex items-center gap-2 min-w-0">
-            <span class="text-sm">🌐</span>
-            <span class="category-nav-title">Todos los canales</span>
+          <div class="flex items-center gap-2.5 min-w-0">
+            <svg class="w-4 h-4 opacity-60 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z"/></svg>
+            <span class="category-nav-title">Todos los contenidos</span>
           </div>
           <span class="category-nav-badge">${this.streams.length}</span>
         </div>
@@ -446,8 +447,8 @@ const App = {
 
       html += `
         <div class="category-nav-item ${isActive ? 'active' : ''} focusable" data-cat-id="${catId}">
-          <div class="flex items-center gap-2 min-w-0">
-            <span class="text-sm opacity-70">📺</span>
+          <div class="flex items-center gap-2.5 min-w-0">
+            <span class="w-1.5 h-1.5 rounded-full ${isActive ? 'bg-sky-400' : 'bg-[#647082]/50'} shrink-0"></span>
             <span class="category-nav-title" title="${catName}">${catName}</span>
           </div>
           <span class="category-nav-badge">${count}</span>
@@ -489,16 +490,15 @@ const App = {
         // Unified Spain Chip
         const isSpainActive = this.currentCategory && this.currentCategory.startsWith('unified_');
         hHtml += `
-          <button class="category-chip ${isSpainActive ? 'active' : ''} focusable flex items-center gap-1.5 font-bold" data-chip-action="spain">
+          <button class="category-chip ${isSpainActive ? 'active' : ''} focusable flex items-center gap-1.5 font-medium" data-chip-action="spain">
             <span>🇪🇸</span>
-            <span>Todo Spain</span>
+            <span>Spain</span>
           </button>
         `;
 
         // All Channels Chip
         hHtml += `
           <button class="category-chip ${this.currentCategory === 'all' ? 'active' : ''} focusable flex items-center gap-1.5" data-cat-id="all">
-            <span>🌐</span>
             <span>Todos (${this.streams.length})</span>
           </button>
         `;
@@ -512,7 +512,7 @@ const App = {
           hHtml += `
             <button class="category-chip ${isActive ? 'active' : ''} focusable flex items-center gap-1.5 whitespace-nowrap" data-cat-id="${catId}">
               <span>${catName}</span>
-              <span class="opacity-75 text-[10px] ml-1 bg-black/40 px-1.5 py-0.5 rounded-full font-bold">${count}</span>
+              <span class="opacity-70 text-[10px] ml-0.5 bg-white/[0.06] px-1.5 py-0.5 rounded font-semibold tabular-nums">${count}</span>
             </button>
           `;
         });
@@ -704,33 +704,33 @@ const App = {
           }
 
           ${isWatched ? `
-            <div class="watched-indicator absolute top-2 left-2 z-10 flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-950/90 border border-emerald-500/60 text-emerald-300 text-[10px] font-bold shadow-lg backdrop-blur-sm pointer-events-none">
-              <svg class="w-3 h-3 text-emerald-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg>
+            <div class="watched-indicator absolute top-2 left-2 z-10 flex items-center gap-1 px-2 py-0.5 rounded bg-[#090b0f]/85 border border-emerald-500/40 text-emerald-400 text-[10px] font-semibold backdrop-blur-md pointer-events-none">
+              <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg>
               <span>${isSeries ? 'Finalizada' : 'Vista'}</span>
             </div>
           ` : ''}
 
           ${(inProgress && inProgress.progress > 0 && !isWatched) ? `
-            <div class="absolute bottom-0 left-0 right-0 h-1.5 bg-gray-900/80 z-10 overflow-hidden">
-              <div class="h-full bg-gradient-to-r from-cyan-400 to-indigo-500 rounded-full" style="width: ${inProgress.progress}%"></div>
+            <div class="absolute bottom-0 left-0 right-0 h-1 bg-white/10 z-10 overflow-hidden">
+              <div class="h-full bg-sky-400" style="width: ${inProgress.progress}%"></div>
             </div>
           ` : ''}
 
           <div class="stream-card-overlay">
             <button class="play-card-btn" title="Reproducir">
-              <svg class="w-8 h-8" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+              <svg class="w-6 h-6 ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
             </button>
           </div>
 
           <button class="fav-star-btn ${isFav ? 'active' : ''}" data-fav-id="${targetId}" title="Favorito">
-            <svg class="w-5 h-5" fill="${isFav ? 'currentColor' : 'none'}" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="w-4 h-4" fill="${isFav ? 'currentColor' : 'none'}" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/>
             </svg>
           </button>
 
           ${(isVod || isSeries) ? `
-            <button class="watched-toggle-btn ${isWatched ? 'active text-emerald-400' : 'text-gray-400'} absolute bottom-2 right-2 z-20 p-1.5 rounded-lg bg-gray-900/80 hover:bg-gray-800 hover:text-emerald-300 border border-gray-700/60 backdrop-blur-sm transition-all" data-watched-id="${targetId}" title="${isWatched ? 'Marcar como no visto' : 'Marcar como visto'}">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+            <button class="watched-toggle-btn ${isWatched ? 'active text-emerald-400 border-emerald-500/40' : 'text-[#9aa4b2] border-white/[0.08]'} absolute bottom-2 right-2 z-20 min-w-[36px] min-h-[36px] flex items-center justify-center rounded-full bg-[#090b0f]/75 hover:bg-[#090b0f]/95 hover:text-emerald-400 border backdrop-blur-md transition-colors" data-watched-id="${targetId}" title="${isWatched ? 'Marcar como no visto' : 'Marcar como visto'}">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M5 13l4 4L19 7"/></svg>
             </button>
           ` : ''}
         </div>
@@ -838,32 +838,32 @@ const App = {
       const title = isSeries ? (item.name || item.series_name) : item.name;
 
       return `
-        <div class="continue-card flex-shrink-0 w-44 sm:w-52 bg-gray-900/90 hover:bg-gray-800/90 border border-gray-700/60 hover:border-cyan-500/50 rounded-xl overflow-hidden shadow-lg transition-all group relative cursor-pointer" data-continue-id="${item.id}">
-          <button class="remove-continue-btn absolute top-2 right-2 z-20 p-1 rounded-full bg-black/60 hover:bg-red-600/80 text-gray-300 hover:text-white transition-all" data-remove-id="${item.id}" title="Quitar de continuar viendo">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
+        <div class="continue-card flex-shrink-0 w-44 sm:w-52 bg-[#161a22] hover:bg-[#1c212c] border border-white/[0.08] hover:border-white/[0.16] rounded-lg overflow-hidden transition-all group relative cursor-pointer" data-continue-id="${item.id}">
+          <button class="remove-continue-btn absolute top-1.5 right-1.5 z-20 min-w-[32px] min-h-[32px] flex items-center justify-center rounded-full bg-[#090b0f]/75 hover:bg-red-950/90 text-[#9aa4b2] hover:text-red-300 border border-white/[0.08] transition-colors" data-remove-id="${item.id}" title="Quitar de continuar viendo">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
           </button>
           
-          <div class="relative w-full h-28 sm:h-32 bg-gray-950 overflow-hidden">
-            <img src="${poster}" alt="${title}" loading="lazy" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" onerror="this.src='/icons/icon.svg'">
-            <div class="absolute inset-0 bg-gradient-to-t from-gray-950 via-transparent to-black/30"></div>
+          <div class="relative w-full h-28 sm:h-32 bg-[#0b0d12] overflow-hidden">
+            <img src="${poster}" alt="${title}" loading="lazy" class="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-300" onerror="this.src='/icons/icon.svg'">
+            <div class="absolute inset-0 bg-gradient-to-t from-[#090b0f]/80 via-transparent to-transparent"></div>
             
             <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-              <div class="w-10 h-10 rounded-full bg-cyan-500/90 text-white flex items-center justify-center shadow-lg">
+              <div class="w-10 h-10 rounded-full bg-white/95 text-[#090b0f] flex items-center justify-center shadow-lg">
                 <svg class="w-5 h-5 ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
               </div>
             </div>
 
             <!-- Progress bar -->
-            <div class="absolute bottom-0 left-0 right-0 h-1.5 bg-gray-800">
-              <div class="h-full bg-gradient-to-r from-cyan-400 to-indigo-500" style="width: ${item.progress || 0}%"></div>
+            <div class="absolute bottom-0 left-0 right-0 h-1 bg-white/10">
+              <div class="h-full bg-sky-400" style="width: ${item.progress || 0}%"></div>
             </div>
           </div>
 
-          <div class="p-2.5">
-            <h4 class="text-xs sm:text-sm font-bold text-white truncate group-hover:text-cyan-300" title="${title}">${title}</h4>
-            <div class="flex items-center justify-between mt-1 text-[11px] text-gray-400">
+          <div class="p-2.5 border-t border-white/[0.04]">
+            <h4 class="text-xs sm:text-sm font-semibold text-[#f4f6f9] truncate" title="${title}">${title}</h4>
+            <div class="flex items-center justify-between mt-1 text-[11px] text-[#9aa4b2]">
               <span class="truncate">${subtitle}</span>
-              <span class="font-semibold text-cyan-400 ml-1 shrink-0">${item.progress}%</span>
+              <span class="font-semibold text-sky-400 ml-1 shrink-0 tabular-nums">${item.progress}%</span>
             </div>
           </div>
         </div>
@@ -915,9 +915,9 @@ const App = {
         const posterWrap = card.querySelector('.stream-poster-wrap');
         if (posterWrap) {
           const badge = document.createElement('div');
-          badge.className = 'watched-indicator absolute top-2 left-2 z-10 flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-950/90 border border-emerald-500/60 text-emerald-300 text-[10px] font-bold shadow-lg backdrop-blur-sm pointer-events-none';
+          badge.className = 'watched-indicator absolute top-2 left-2 z-10 flex items-center gap-1 px-2 py-0.5 rounded bg-[#090b0f]/85 border border-emerald-500/40 text-emerald-400 text-[10px] font-semibold backdrop-blur-md pointer-events-none';
           badge.innerHTML = `
-            <svg class="w-3 h-3 text-emerald-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg>
+            <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg>
             <span>${this.currentTab === 'series' ? 'Finalizada' : 'Vista'}</span>
           `;
           posterWrap.appendChild(badge);
@@ -1031,40 +1031,40 @@ const App = {
         const eps = info.episodes[seasonNum] || [];
         episodesHtml += `
           <div class="mb-6">
-            <h4 class="text-base font-bold text-cyan-400 mb-3 border-b border-gray-700/80 pb-1.5 flex items-center justify-between">
+            <h4 class="text-sm font-semibold text-[#f4f6f9] mb-3 border-b border-white/[0.08] pb-2 flex items-center justify-between">
               <span>Temporada ${seasonNum}</span>
-              <span class="text-xs text-gray-400 font-normal">${eps.length} capítulos</span>
+              <span class="text-xs text-[#647082] font-normal tabular-nums">${eps.length} capítulos</span>
             </h4>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5">
               ${eps.map(ep => {
                 const epIdStr = String(ep.id);
                 const isEpWatched = Storage.isWatched(epIdStr);
                 const epProgress = Storage.getPlaybackProgress(epIdStr);
 
                 return `
-                <div class="episode-card relative flex items-center justify-between p-3 rounded-xl bg-gray-800/90 hover:bg-gray-750 border border-gray-700/60 hover:border-cyan-500/40 cursor-pointer transition-all overflow-hidden" data-ep-id="${ep.id}" data-ep-ext="${ep.container_extension || 'mp4'}" data-ep-num="${ep.episode_num || ''}" data-season-num="${seasonNum}">
+                <div class="episode-card relative flex items-center justify-between min-h-[54px] p-3 rounded-lg bg-[#161a22] hover:bg-[#1c212c] border border-white/[0.08] hover:border-white/[0.16] cursor-pointer transition-colors overflow-hidden" data-ep-id="${ep.id}" data-ep-ext="${ep.container_extension || 'mp4'}" data-ep-num="${ep.episode_num || ''}" data-season-num="${seasonNum}">
                   <div class="flex items-center gap-2.5 overflow-hidden pr-2">
-                    <span class="text-xs font-bold px-2 py-1 rounded bg-gray-700/80 text-cyan-300 shrink-0">E${ep.episode_num || ''}</span>
+                    <span class="text-xs font-semibold px-2 py-1 rounded bg-[#0c0f14] text-[#9aa4b2] border border-white/[0.06] shrink-0 tabular-nums">E${ep.episode_num || ''}</span>
                     <div class="overflow-hidden">
-                      <span class="font-semibold text-white text-sm truncate block">${ep.title || 'Episodio ' + (ep.episode_num || '')}</span>
+                      <span class="font-medium text-[#f4f6f9] text-sm truncate block">${ep.title || 'Episodio ' + (ep.episode_num || '')}</span>
                       ${isEpWatched ? `
-                        <span class="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-400">✓ Visto</span>
+                        <span class="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400">✓ Visto</span>
                       ` : (epProgress && epProgress.progress > 0) ? `
-                        <span class="inline-flex items-center gap-1 text-[11px] font-semibold text-cyan-400">En progreso (${epProgress.progress}%)</span>
+                        <span class="inline-flex items-center gap-1 text-[11px] font-medium text-sky-400 tabular-nums">En progreso (${epProgress.progress}%)</span>
                       ` : ''}
                     </div>
                   </div>
                   
                   <div class="flex items-center gap-2 shrink-0">
-                    <button class="toggle-ep-watch-btn p-1.5 rounded-lg ${isEpWatched ? 'bg-emerald-950 text-emerald-400 border border-emerald-500/50' : 'bg-gray-700/70 text-gray-400 hover:text-emerald-300'} text-xs font-bold transition-all" data-ep-id="${ep.id}" title="${isEpWatched ? 'Marcar como no visto' : 'Marcar como visto'}">
-                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                    <button class="toggle-ep-watch-btn min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg ${isEpWatched ? 'bg-emerald-950/70 text-emerald-400 border border-emerald-500/40' : 'bg-[#0c0f14] text-[#9aa4b2] hover:text-emerald-400 border border-white/[0.08]'} transition-colors" data-ep-id="${ep.id}" title="${isEpWatched ? 'Marcar como no visto' : 'Marcar como visto'}">
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M5 13l4 4L19 7"/></svg>
                     </button>
-                    <button class="play-ep-btn px-3 py-1.5 bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 rounded-lg text-xs font-bold text-white shadow transition-all">Ver</button>
+                    <button class="play-ep-btn min-h-[36px] px-3.5 py-1.5 bg-sky-500 hover:bg-sky-400 rounded-lg text-xs font-semibold text-[#090b0f] transition-colors">Ver</button>
                   </div>
 
                   ${(epProgress && epProgress.progress > 0 && !isEpWatched) ? `
-                    <div class="absolute bottom-0 left-0 right-0 h-1 bg-gray-700">
-                      <div class="h-full bg-cyan-400" style="width: ${epProgress.progress}%"></div>
+                    <div class="absolute bottom-0 left-0 right-0 h-1 bg-white/10">
+                      <div class="h-full bg-sky-400" style="width: ${epProgress.progress}%"></div>
                     </div>
                   ` : ''}
                 </div>
@@ -1174,12 +1174,12 @@ const App = {
     profiles.forEach(p => {
       const isActive = this.activeProfile?.id === p.id;
       html += `
-        <div class="flex items-center justify-between p-2 rounded bg-gray-800 mb-2">
-          <div class="cursor-pointer flex-1" onclick="App.selectProfile('${p.id}')">
-            <span class="font-bold text-sm ${isActive ? 'text-cyan-400' : 'text-gray-200'}">${p.name || p.username}</span>
-            <span class="block text-xs text-gray-500">${p.serverUrl}</span>
+        <div class="flex items-center justify-between min-h-[48px] p-2.5 rounded-lg bg-[#161a22] border ${isActive ? 'border-sky-500/40' : 'border-white/[0.08]'} mb-2">
+          <div class="cursor-pointer flex-1 min-w-0 pr-2" onclick="App.selectProfile('${p.id}')">
+            <span class="font-semibold text-sm block truncate ${isActive ? 'text-sky-400' : 'text-[#f4f6f9]'}">${p.name || p.username}</span>
+            <span class="block text-xs text-[#647082] truncate">${p.serverUrl}</span>
           </div>
-          <button class="text-red-400 hover:text-red-300 text-xs px-2" onclick="App.deleteProfile('${p.id}')">Borrar</button>
+          <button class="min-h-[34px] px-2.5 text-red-400 hover:text-red-300 hover:bg-red-950/30 rounded text-xs font-medium transition-colors" onclick="App.deleteProfile('${p.id}')">Borrar</button>
         </div>
       `;
     });
@@ -1356,13 +1356,13 @@ const App = {
     const isAllFav = this.filteredStreams.length > 0 && Storage.isCategoryFavorited(this.filteredStreams);
     if (favBtn && favBtnText) {
       if (isAllFav) {
-        favBtnText.textContent = `Quitar todo ${categoryName} de Favoritos`;
-        favBtn.className = 'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-950/40 hover:bg-amber-900/60 text-amber-300 border border-amber-800/40 transition-all focusable';
+        favBtnText.textContent = `Quitar ${categoryName} de Favoritos`;
+        favBtn.className = 'min-h-[36px] flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-amber-950/40 hover:bg-amber-950/60 text-amber-300 border border-amber-700/40 transition-colors focusable';
       } else {
         favBtnText.textContent = isUnified
-          ? `⭐ Guardar todo "${categoryName}" en Favoritos (${this.filteredStreams.length})`
+          ? `Guardar "${categoryName}" (${this.filteredStreams.length})`
           : (this.currentCategory === 'all' ? 'Guardar lista en Favoritos' : 'Guardar grupo en Favoritos');
-        favBtn.className = 'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-indigo-600/50 to-cyan-600/50 hover:from-indigo-600/70 hover:to-cyan-600/70 text-cyan-200 border border-cyan-500/50 transition-all focusable shadow-md';
+        favBtn.className = 'min-h-[36px] flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-[#161a22] hover:bg-[#1c212c] text-[#f4f6f9] border border-white/[0.1] transition-colors focusable';
       }
     }
   },
@@ -1412,7 +1412,7 @@ const App = {
     if (!toast) {
       toast = document.createElement('div');
       toast.id = 'appToast';
-      toast.className = 'fixed bottom-20 md:bottom-8 left-1/2 transform -translate-x-1/2 z-50 px-4 py-2.5 rounded-2xl bg-gray-900/95 text-white text-xs font-bold shadow-2xl border border-cyan-500/40 backdrop-blur-md transition-all duration-300 pointer-events-none opacity-0';
+      toast.className = 'fixed bottom-20 md:bottom-8 left-1/2 transform -translate-x-1/2 z-50 px-4 py-2.5 rounded-lg bg-[#161a22]/95 text-[#f4f6f9] text-xs font-medium shadow-xl border border-white/[0.12] backdrop-blur-md transition-all duration-300 pointer-events-none opacity-0';
       document.body.appendChild(toast);
     }
     toast.textContent = message;

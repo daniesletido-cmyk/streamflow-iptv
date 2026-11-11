@@ -1,17 +1,49 @@
-/* StreamFlow IPTV - Video Player & OSD Styling */
+/* StreamFlow IPTV - Video Player & OSD Styling ("Cinema Slate") */
 
 #playerView {
-  transition: opacity 0.25s ease-in-out;
+  transition: opacity 0.22s ease-in-out;
   touch-action: none;
 }
 
 #playerControls {
   user-select: none;
+  padding-top: max(1rem, var(--safe-top));
+  padding-bottom: max(1rem, var(--safe-bottom));
+  padding-left: max(1rem, var(--safe-left));
+  padding-right: max(1rem, var(--safe-right));
+}
+
+.player-ctrl-btn {
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background-color: rgba(16, 19, 25, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #f4f6f9;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: background-color 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
+}
+.player-ctrl-btn:hover {
+  background-color: rgba(28, 33, 44, 0.9);
+  border-color: rgba(255, 255, 255, 0.24);
+}
+.player-ctrl-btn:active {
+  transform: scale(0.95);
 }
 
 /* Side Channel Drawer */
 #channelDrawer {
-  box-shadow: 10px 0 30px rgba(0, 0, 0, 0.8);
+  background-color: rgba(16, 19, 25, 0.96);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-right: 1px solid var(--border-subtle);
+  padding-top: var(--safe-top);
+  padding-bottom: var(--safe-bottom);
+  box-shadow: 12px 0 36px rgba(0, 0, 0, 0.75);
 }
 #channelDrawer.drawer-open {
   transform: translateX(0);
@@ -21,29 +53,33 @@
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.65rem 0.85rem;
-  border-radius: 0.65rem;
+  min-height: 44px;
+  padding: 0.55rem 0.75rem;
+  border-radius: 0.5rem;
   cursor: pointer;
-  color: #94a3b8;
+  color: var(--text-secondary);
   font-size: 0.875rem;
-  transition: all 0.15s ease;
+  font-weight: 500;
+  border: 1px solid transparent;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 .drawer-channel-item:hover {
-  background-color: rgba(255, 255, 255, 0.08);
-  color: #ffffff;
+  background-color: var(--bg-elevated);
+  color: var(--text-primary);
 }
 .drawer-channel-item.active {
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.35), rgba(6, 182, 212, 0.35));
-  color: #38bdf8;
+  background-color: var(--accent-subtle);
+  color: var(--accent-light);
   font-weight: 600;
-  border: 1px solid rgba(56, 189, 248, 0.4);
+  border-color: var(--accent-border);
 }
 
 .drawer-num {
   font-size: 0.75rem;
-  font-weight: 700;
-  color: #64748b;
-  min-width: 1.5rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  min-width: 1.75rem;
 }
 .drawer-name {
   white-space: nowrap;
@@ -57,12 +93,8 @@
   background-color: #000000;
 }
 
-/* Modals */
-.modal-overlay {
-  animation: fadeIn 0.2s ease;
-}
-
+/* Modal animation */
 @keyframes fadeIn {
-  from { opacity: 0; transform: scale(0.98); }
-  to { opacity: 1; transform: scale(1); }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
