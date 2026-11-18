@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>PayloadContent</key>
+    <array>
+        <dict>
+            <key>DNSSettings</key>
+            <dict>
+                <key>DNSProtocol</key>
+                <string>HTTPS</string>
+                <key>ServerURL</key>
+                <string>https://dns.nextdns.io/a2569e</string>
+            </dict>
+            <key>PayloadDescription</key>
+            <string>Configuración de DNS seguro con bloqueo de revocación de certificados para iOS / iPadOS.</string>
+            <key>PayloadDisplayName</key>
+            <string>StreamFlow Anti-Revoke DNS Shield</string>
+            <key>PayloadIdentifier</key>
+            <string>com.streamflow.iptv.dns.managed</string>
+            <key>PayloadType</key>
+            <string>com.apple.dnsSettings.managed</string>
+            <key>PayloadUUID</key>
+            <string>7A28F276-8809-4A92-BF14-1F0996D7D311</string>
+            <key>PayloadVersion</key>
+            <integer>1</integer>
+            <key>ProhibitedURLStringPatterns</key>
+            <array>
+                <string>*ocsp.apple.com*</string>
+                <string>*ocsp2.apple.com*</string>
+                <string>*valid.apple.com*</string>
+                <string>*crl.apple.com*</string>
+                <string>*mesu.apple.com*</string>
+                <string>*gdmf.apple.com*</string>
+                <string>*appattest.apple.com*</string>
+                <string>*vpp.itunes.apple.com*</string>
+                <string>*certs.apple.com*</string>
+                <string>*crl.apple.com*</string>
+                <string>*crl.entrust.net*</string>
+                <string>*ocsp.entrust.net*</string>
+            </array>
+        </dict>
+    </array>
+    <key>PayloadDescription</key>
+    <string>Bloquea las llamadas a los servidores OCSP y CRL de Apple para mantener aplicaciones de ESign y StreamFlow IPTV activas sin caducidad.</string>
+    <key>PayloadDisplayName</key>
+    <string>StreamFlow Anti-Revoke DNS</string>
+    <key>PayloadIdentifier</key>
+    <string>com.streamflow.iptv.dns.profile</string>
+    <key>PayloadOrganization</key>
+    <string>StreamFlow IPTV</string>
+    <key>PayloadRemovalDisallowed</key>
+    <false/>
+    <key>PayloadType</key>
+    <string>Configuration</string>
+    <key>PayloadUUID</key>
+    <string>D24A1054-CE98-46D9-B334-037D9747BA28</string>
+    <key>PayloadVersion</key>
+    <integer>1</integer>
+</dict>
+</plist>

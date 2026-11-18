@@ -75,5 +75,12 @@
 	<array>
 		<string>audio</string>
 	</array>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>StreamFlow IPTV necesita acceso a la red local para descubrir servidores y reproducir transmisiones multimedia.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_http._tcp</string>
+		<string>_airplay._tcp</string>
+	</array>
 </dict>
 </plist>

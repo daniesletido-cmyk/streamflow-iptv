@@ -29,8 +29,8 @@ jobs:
       - name: Install Node Dependencies
         run: npm install
 
-      - name: Sync Capacitor iOS Project
-        run: npx cap sync ios
+      - name: Build Web Assets & Sync Capacitor iOS
+        run: npm run build
 
       - name: Build & Archive with Xcode (Unsigned for Sideloading)
         run: |
@@ -41,6 +41,7 @@ jobs:
             -configuration Release \
             -destination 'generic/platform=iOS' \
             -archivePath "$PWD/build/App.xcarchive" \
+            -derivedDataPath "$PWD/build/DerivedData" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY=""
@@ -48,14 +49,41 @@ jobs:
       - name: Package Payload into .ipa
         run: |
           mkdir -p Payload
-          APP_PATH=$(find "$PWD/build/App.xcarchive" -name "*.app" -type d | head -n 1)
-          echo "Found app at: $APP_PATH"
-          if [ -z "$APP_PATH" ]; then
-            echo "Error: No .app bundle found in xcarchive"
+          APP_PATH="$PWD/build/App.xcarchive/Products/Applications/App.app"
+          if [ ! -d "$APP_PATH" ]; then
+            echo "Direct xcarchive path not found, searching..."
+            APP_PATH=$(find "$PWD/build" -name "App.app" -type d | head -n 1)
+          fi
+          
+          echo "Found app bundle at: $APP_PATH"
+          if [ -z "$APP_PATH" ] || [ ! -d "$APP_PATH" ]; then
+            echo "Error: No .app bundle found in build output"
             exit 1
           fi
+
+          # Copy .app bundle to Payload
           cp -r "$APP_PATH" Payload/
-          zip -r StreamFlow-IPTV.ipa Payload
+
+          # Include any compiled frameworks from DerivedData if present
+          mkdir -p Payload/App.app/Frameworks
+          if [ -d "$PWD/build/DerivedData/Build/Products/Release-iphoneos" ]; then
+            find "$PWD/build/DerivedData/Build/Products/Release-iphoneos" -maxdepth 1 -name "*.framework" -exec cp -r {} Payload/App.app/Frameworks/ \; || true
+          fi
+          # Clean up empty Frameworks folder if none were needed
+          if [ -z "$(ls -A Payload/App.app/Frameworks 2>/dev/null)" ]; then
+            rmdir Payload/App.app/Frameworks
+          fi
+
+          # Print bundle contents for verification
+          echo "=== App.app root contents ==="
+          ls -lh Payload/App.app
+          echo "=== App.app/public assets ==="
+          ls -lh Payload/App.app/public 2>/dev/null || echo "No public folder found"
+
+          # Package into .ipa
+          zip -r -9 StreamFlow-IPTV.ipa Payload
+          echo "=== Generated IPA file ==="
+          ls -lh StreamFlow-IPTV.ipa
 
       - name: Upload StreamFlow-IPTV.ipa as Artifact
         uses: actions/upload-artifact@v4
@@ -76,6 +104,7 @@ jobs:
             Paquete nativo iOS (.ipa) sin comprimir listo para instalar de forma 100% gratuita y sin cables usando **ESign**, **SideStore**, **AltStore** o **Sideloadly**.
 
             - 📥 **Descarga directa:** [`StreamFlow-IPTV.ipa`](https://github.com/${{ github.repository }}/releases/download/latest/StreamFlow-IPTV.ipa)
+            - 🛡️ **Perfil DNS Anti-Revocación:** [`StreamFlow-AntiRevoke.mobileconfig`](https://streamflow-iptv-eta.vercel.app/api/ios-dns-profile)
             - 🚀 **Instalador web y guía interactiva:** [https://streamflow-iptv-eta.vercel.app/instalar](https://streamflow-iptv-eta.vercel.app/instalar)
           draft: false
           prerelease: false

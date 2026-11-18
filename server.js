@@ -69,6 +69,14 @@ app.get('/instalar', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'instalar.html'));
 });
 
+// Route for Native iOS Anti-Revoke DNS Profile
+app.get('/api/ios-dns-profile', (req, res) => {
+  const profilePath = path.join(__dirname, 'public', 'StreamFlow-AntiRevoke.mobileconfig');
+  res.setHeader('Content-Type', 'application/x-apple-aspen-config; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="StreamFlow-AntiRevoke.mobileconfig"');
+  res.sendFile(profilePath);
+});
+
 function cleanServerUrl(rawUrl) {
   let url = (rawUrl || '').trim();
   if (!url.startsWith('http://') && !url.startsWith('https://')) {
