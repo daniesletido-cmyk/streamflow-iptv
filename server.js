@@ -64,6 +64,11 @@ app.use(express.static(path.join(__dirname, 'public'), {
   etag: true
 }));
 
+// Route for iOS / iPadOS Direct Installer
+app.get('/instalar', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'instalar.html'));
+});
+
 function cleanServerUrl(rawUrl) {
   let url = (rawUrl || '').trim();
   if (!url.startsWith('http://') && !url.startsWith('https://')) {

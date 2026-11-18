@@ -134,7 +134,6 @@ const App = {
     // Modal triggers
     document.getElementById('profileBtn')?.addEventListener('click', () => this.openLoginModal());
     document.getElementById('settingsBtn')?.addEventListener('click', () => this.openSettingsModal());
-    document.getElementById('iosInstallBtn')?.addEventListener('click', () => this.openIosModal());
     document.getElementById('refreshCatalogBtn')?.addEventListener('click', async () => {
       if (typeof CatalogCache !== 'undefined') {
         await CatalogCache.clear();

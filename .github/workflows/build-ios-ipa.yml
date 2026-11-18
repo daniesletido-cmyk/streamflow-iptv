@@ -3,8 +3,13 @@ name: Build iOS IPA (Capacitor)
 on:
   workflow_dispatch:
   push:
+    branches:
+      - master
     tags:
       - 'v*'
+
+permissions:
+  contents: write
 
 jobs:
   build-ipa:
@@ -58,3 +63,22 @@ jobs:
           name: StreamFlow-IPTV-ipa
           path: StreamFlow-IPTV.ipa
           if-no-files-found: error
+
+      - name: Publish Direct Release (latest)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          target_commitish: ${{ github.sha }}
+          name: StreamFlow IPTV - iOS IPA Release
+          body: |
+            ## 📱 StreamFlow IPTV para iPhone y iPad (iOS / iPadOS)
+
+            Paquete nativo iOS (.ipa) sin comprimir listo para instalar de forma 100% gratuita y sin cables usando **ESign**, **SideStore**, **AltStore** o **Sideloadly**.
+
+            - 📥 **Descarga directa:** [`StreamFlow-IPTV.ipa`](https://github.com/${{ github.repository }}/releases/download/latest/StreamFlow-IPTV.ipa)
+            - 🚀 **Instalador web y guía interactiva:** [https://streamflow-iptv-eta.vercel.app/instalar](https://streamflow-iptv-eta.vercel.app/instalar)
+          draft: false
+          prerelease: false
+          files: StreamFlow-IPTV.ipa
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

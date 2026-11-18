@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Instalar StreamFlow IPTV en iPhone y iPad</title>
+
+  <!-- PWA & iOS Safari meta tags -->
+  <link rel="manifest" href="/manifest.json">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="StreamFlow">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <link rel="icon" type="image/svg+xml" href="/icons/icon.svg">
+  <meta name="theme-color" content="#090b0f">
+
+  <!-- Tailwind CSS & Google Fonts -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            canvas: '#090b0f',
+            surface: '#101319',
+            elevated: '#161a22',
+            accent: '#0ea5e9'
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Client-side QR Code generator -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+
+  <style>
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background-color: #090b0f;
+      color: #f4f6f9;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .custom-scroll::-webkit-scrollbar {
+      width: 6px;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 9999px;
+    }
+    @keyframes bounce-subtle {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-4px); }
+    }
+    .animate-bounce-subtle {
+      animation: bounce-subtle 1.8s ease-in-out infinite;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between selection:bg-sky-500/30 selection:text-sky-200">
+
+  <!-- TOP HEADER -->
+  <header class="sticky top-0 z-40 bg-[#090b0f]/90 backdrop-blur-md border-b border-white/[0.08] px-4 py-3 sm:px-6">
+    <div class="max-w-4xl mx-auto flex items-center justify-between">
+      <a href="/" class="flex items-center gap-2.5 text-sm font-medium text-slate-300 hover:text-white transition-colors group">
+        <div class="w-8 h-8 rounded-lg bg-[#161a22] border border-white/[0.1] flex items-center justify-center group-hover:border-sky-500/50 transition-colors">
+          <svg class="w-4 h-4 text-sky-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18"/>
+          </svg>
+        </div>
+        <span>Volver a StreamFlow</span>
+      </a>
+
+      <div class="flex items-center gap-2">
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+          iOS 14 - iOS 18+
+        </span>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN CONTAINER -->
+  <main class="flex-1 max-w-4xl w-full mx-auto px-4 py-6 sm:px-6 sm:py-8 space-y-6">
+
+    <!-- HERO BANNER -->
+    <div class="text-center space-y-3">
+      <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-sky-500/20 via-sky-600/10 to-transparent border border-sky-500/30 shadow-lg shadow-sky-500/10 mb-1">
+        <svg class="w-8 h-8 text-sky-400" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 7.17c.66-.83 1.11-1.99.99-3.17-1.01.04-2.23.67-2.95 1.51-.64.73-1.2 1.92-1.05 3.06 1.12.09 2.26-.57 3.01-1.4z"/>
+        </svg>
+      </div>
+      <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-white">
+        Instala StreamFlow en tu iPhone o iPad
+      </h1>
+      <p class="text-sm sm:text-base text-slate-400 max-w-xl mx-auto">
+        100% gratuito, sin ordenador Mac ni cables, y sin pagar cuenta de desarrollador de Apple. Elige tu método preferido:
+      </p>
+    </div>
+
+    <!-- DESKTOP QR CODE CARD (Shown primarily on PC / Desktop) -->
+    <div id="desktopQrBox" class="hidden sm:block bg-[#101319] border border-white/[0.08] rounded-2xl p-5 sm:p-6 shadow-xl">
+      <div class="flex flex-col md:flex-row items-center gap-6">
+        <div class="p-3 bg-white rounded-xl shadow-inner shrink-0">
+          <canvas id="qrCanvas" class="w-36 h-36 rounded-lg block"></canvas>
+        </div>
+        <div class="space-y-2 text-center md:text-left flex-1">
+          <div class="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-sky-400 bg-sky-500/10 px-2.5 py-1 rounded-md">
+            <span>¿Estás en tu ordenador?</span>
+          </div>
+          <h2 class="text-lg font-semibold text-white">Abre este instalador en tu móvil en 2 segundos</h2>
+          <p class="text-sm text-slate-400 leading-relaxed">
+            Apunta la cámara de tu iPhone o iPad hacia este código QR para abrir directamente esta página y comenzar la instalación con 1 toque.
+          </p>
+          <div class="pt-1 flex items-center justify-center md:justify-start gap-2 text-xs text-slate-500 font-mono">
+            <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+            <span id="qrUrlDisplay">https://streamflow-iptv-eta.vercel.app/instalar</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- METHOD SELECTION TABS -->
+    <div class="flex p-1 bg-[#101319] rounded-xl border border-white/[0.08]">
+      <button id="tabMethod1" class="flex-1 py-2.5 px-3 rounded-lg text-xs sm:text-sm font-semibold transition-all flex items-center justify-center gap-2 bg-sky-500 text-white shadow-sm">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/>
+        </svg>
+        <span>Método 1: PWA Pro (Recomendado)</span>
+      </button>
+      <button id="tabMethod2" class="flex-1 py-2.5 px-3 rounded-lg text-xs sm:text-sm font-semibold transition-all flex items-center justify-center gap-2 text-slate-400 hover:text-white">
+        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 7.17c.66-.83 1.11-1.99.99-3.17-1.01.04-2.23.67-2.95 1.51-.64.73-1.2 1.92-1.05 3.06 1.12.09 2.26-.57 3.01-1.4z"/>
+        </svg>
+        <span>Método 2: Archivo .IPA (ESign / Sin PC)</span>
+      </button>
+    </div>
+
+    <!-- ================= METHOD 1: PWA (NATIVE WEB APP) ================= -->
+    <section id="contentMethod1" class="space-y-4">
+      <div class="bg-[#101319] border border-white/[0.08] rounded-2xl p-5 sm:p-7 space-y-6">
+        
+        <div class="flex items-start justify-between gap-4">
+          <div class="space-y-1">
+            <div class="flex items-center gap-2">
+              <span class="px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                0 Instalaciones raras • Sin caducidad
+              </span>
+              <span class="px-2 py-0.5 rounded text-[11px] font-medium bg-sky-500/10 text-sky-300">
+                100% Nativo Safari
+              </span>
+            </div>
+            <h3 class="text-xl font-bold text-white">Instalar como App de Pantalla Completa</h3>
+            <p class="text-sm text-slate-400 leading-relaxed">
+              Apple permite instalar StreamFlow como una aplicación nativa real directamente desde Safari. No caduca a los 7 días, se ejecuta a pantalla completa sin barra de navegación, y aprovecha la aceleración por hardware de iOS.
+            </p>
+          </div>
+        </div>
+
+        <!-- 3-STEP VISUAL GUIDE -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+          <!-- Step 1 -->
+          <div class="bg-[#161a22] border border-white/[0.06] rounded-xl p-4 space-y-3 relative overflow-hidden group hover:border-sky-500/30 transition-colors">
+            <div class="flex items-center justify-between">
+              <span class="w-7 h-7 rounded-lg bg-sky-500/20 text-sky-400 font-bold text-xs flex items-center justify-center">1</span>
+              <span class="text-xs text-slate-500">Safari</span>
+            </div>
+            <div class="space-y-1">
+              <h4 class="font-semibold text-sm text-white flex items-center gap-1.5">
+                Pulsa Compartir
+                <svg class="w-4 h-4 text-sky-400 inline" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/>
+                </svg>
+              </h4>
+              <p class="text-xs text-slate-400 leading-normal">
+                En Safari de tu iPhone, toca el icono cuadrado con la flecha hacia arriba situado en la barra inferior (o superior en iPad).
+              </p>
+            </div>
+          </div>
+
+          <!-- Step 2 -->
+          <div class="bg-[#161a22] border border-white/[0.06] rounded-xl p-4 space-y-3 relative overflow-hidden group hover:border-sky-500/30 transition-colors">
+            <div class="flex items-center justify-between">
+              <span class="w-7 h-7 rounded-lg bg-sky-500/20 text-sky-400 font-bold text-xs flex items-center justify-center">2</span>
+              <span class="text-xs text-slate-500">Menú</span>
+            </div>
+            <div class="space-y-1">
+              <h4 class="font-semibold text-sm text-white flex items-center gap-1.5">
+                «Añadir a inicio»
+                <span class="inline-block px-1.5 py-0.2 bg-white/10 rounded text-[11px] font-mono text-slate-300">+</span>
+              </h4>
+              <p class="text-xs text-slate-400 leading-normal">
+                Baja por la lista del menú de compartir y pulsa en la opción <strong>«Añadir a pantalla de inicio»</strong>.
+              </p>
+            </div>
+          </div>
+
+          <!-- Step 3 -->
+          <div class="bg-[#161a22] border border-white/[0.06] rounded-xl p-4 space-y-3 relative overflow-hidden group hover:border-sky-500/30 transition-colors">
+            <div class="flex items-center justify-between">
+              <span class="w-7 h-7 rounded-lg bg-sky-500/20 text-sky-400 font-bold text-xs flex items-center justify-center">3</span>
+              <span class="text-xs text-slate-500">Completar</span>
+            </div>
+            <div class="space-y-1">
+              <h4 class="font-semibold text-sm text-white">Pulsa «Añadir»</h4>
+              <p class="text-xs text-slate-400 leading-normal">
+                Pulsa el botón azul «Añadir» arriba a la derecha. ¡Abre StreamFlow desde tu pantalla de inicio como una app real!
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- ACTION BUTTONS -->
+        <div class="pt-2 flex flex-col sm:flex-row gap-3">
+          <a href="/" class="flex-1 py-3 px-5 rounded-xl bg-sky-500 hover:bg-sky-400 text-white font-semibold text-sm text-center shadow-lg shadow-sky-500/20 transition-all flex items-center justify-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z"/>
+            </svg>
+            <span>Abrir StreamFlow Ahora</span>
+          </a>
+
+          <button id="copyUrlBtn" class="py-3 px-5 rounded-xl bg-[#161a22] hover:bg-[#1e232e] border border-white/[0.1] text-slate-300 font-medium text-sm transition-all flex items-center justify-center gap-2">
+            <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 00-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 01-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 00-3.375-3.375h-1.5a1.125 1.125 0 01-1.125-1.125v-1.5a3.375 3.375 0 00-3.375-3.375H9.75"/>
+            </svg>
+            <span id="copyUrlText">Copiar Enlace para Safari</span>
+          </button>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ================= METHOD 2: NATIVE IPA VIA ESIGN / DNS ================= -->
+    <section id="contentMethod2" class="space-y-4 hidden">
+      <div class="bg-[#101319] border border-white/[0.08] rounded-2xl p-5 sm:p-7 space-y-6">
+
+        <div class="space-y-1">
+          <div class="flex items-center gap-2">
+            <span class="px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider bg-purple-500/10 text-purple-400 border border-purple-500/20">
+              Capacitor 8 iOS • Binario .IPA
+            </span>
+            <span class="px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-500/10 text-emerald-400">
+              Sin Ordenador / Sin Cables
+            </span>
+          </div>
+          <h3 class="text-xl font-bold text-white">Instalar Paquete Nativo .IPA con ESign</h3>
+          <p class="text-sm text-slate-400 leading-relaxed">
+            Puedes instalar el paquete nativo directamente en tu dispositivo sin pagar suscripciones ni conectar ningún cable, usando ESign con un certificado empresarial gratuito y un perfil DNS anti-bloqueo.
+          </p>
+        </div>
+
+        <!-- DIRECT DOWNLOAD BUTTON (HERO) -->
+        <div class="p-4 sm:p-5 rounded-xl bg-gradient-to-r from-sky-500/15 via-[#161a22] to-purple-500/15 border border-sky-500/30 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div class="space-y-1 text-center sm:text-left">
+            <div class="font-bold text-white flex items-center justify-center sm:justify-start gap-2">
+              <svg class="w-5 h-5 text-sky-400" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z"/>
+              </svg>
+              <span>StreamFlow-IPTV.ipa</span>
+              <span class="text-xs px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 font-mono">v1.0.6 (Latest)</span>
+            </div>
+            <p class="text-xs text-slate-400">
+              Binario directo sin comprimir generado en GitHub Actions en macOS.
+            </p>
+          </div>
+          <a id="downloadIpaBtn" href="https://github.com/daniesletido-cmyk/streamflow-iptv/releases/download/latest/StreamFlow-IPTV.ipa" download class="w-full sm:w-auto shrink-0 py-3 px-6 rounded-xl bg-sky-500 hover:bg-sky-400 text-white font-bold text-sm text-center shadow-lg shadow-sky-500/20 transition-all flex items-center justify-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/>
+            </svg>
+            <span>Descargar .IPA Directo</span>
+          </a>
+        </div>
+
+        <!-- INTERACTIVE STEP-BY-STEP CHECKLIST -->
+        <div class="space-y-3">
+          <h4 class="text-sm font-semibold text-slate-200 uppercase tracking-wider text-xs">
+            Pasos para instalarlo desde el móvil (Checklist interactiva):
+          </h4>
+
+          <div class="space-y-2.5">
+
+            <!-- Step 1 Checklist -->
+            <label class="flex items-start gap-3 p-3.5 rounded-xl bg-[#161a22] border border-white/[0.06] hover:border-white/[0.12] transition-colors cursor-pointer select-none">
+              <input type="checkbox" id="checkStep1" class="mt-1 w-4 h-4 rounded text-sky-500 bg-[#101319] border-white/20 focus:ring-0">
+              <div class="space-y-1 flex-1">
+                <div class="flex items-center justify-between">
+                  <span class="text-sm font-semibold text-white">Paso 1: Instalar Perfil DNS Anti-Revocación</span>
+                  <a href="https://raw.githubusercontent.com/hiteshd/ios-anti-revoke-dns/main/Anti-Revoke.mobileconfig" target="_blank" class="text-xs text-sky-400 hover:text-sky-300 font-medium underline">
+                    Descargar Perfil DNS ↗
+                  </a>
+                </div>
+                <p class="text-xs text-slate-400 leading-normal">
+                  Permite descargar el perfil en Safari. Luego ve a <em>Ajustes → Perfil descargado → Instalar</em>. Esto impide que Apple invalide los certificados empresariales.
+                </p>
+              </div>
+            </label>
+
+            <!-- Step 2 Checklist -->
+            <label class="flex items-start gap-3 p-3.5 rounded-xl bg-[#161a22] border border-white/[0.06] hover:border-white/[0.12] transition-colors cursor-pointer select-none">
+              <input type="checkbox" id="checkStep2" class="mt-1 w-4 h-4 rounded text-sky-500 bg-[#101319] border-white/20 focus:ring-0">
+              <div class="space-y-1 flex-1">
+                <div class="flex items-center justify-between">
+                  <span class="text-sm font-semibold text-white">Paso 2: Instalar ESign y Confiar en el Certificado</span>
+                  <a href="https://esign.yyyue.xyz" target="_blank" class="text-xs text-sky-400 hover:text-sky-300 font-medium underline">
+                    Abrir ESign Web ↗
+                  </a>
+                </div>
+                <p class="text-xs text-slate-400 leading-normal">
+                  Instala ESign desde la web oficial. Una vez instalado el icono, entra a <em>Ajustes → General → VPN y gestión de dispositivos</em>, toca el certificado empresarial y pulsa <strong>«Confiar»</strong>.
+                </p>
+              </div>
+            </label>
+
+            <!-- Step 3 Checklist -->
+            <label class="flex items-start gap-3 p-3.5 rounded-xl bg-[#161a22] border border-white/[0.06] hover:border-white/[0.12] transition-colors cursor-pointer select-none">
+              <input type="checkbox" id="checkStep3" class="mt-1 w-4 h-4 rounded text-sky-500 bg-[#101319] border-white/20 focus:ring-0">
+              <div class="space-y-1 flex-1">
+                <div class="flex items-center justify-between">
+                  <span class="text-sm font-semibold text-white">Paso 3: Descargar y Firmar StreamFlow-IPTV.ipa</span>
+                </div>
+                <p class="text-xs text-slate-400 leading-normal">
+                  Pulsa el botón azul «Descargar .IPA Directo» de arriba. Cuando termine, abre ESign, ve a la pestaña <strong>Archivos</strong>, importa el `.ipa` descargado, pulsa <strong>Firma</strong> y luego <strong>Instalar</strong>.
+                </p>
+              </div>
+            </label>
+
+            <!-- Step 4 Checklist -->
+            <label class="flex items-start gap-3 p-3.5 rounded-xl bg-[#161a22] border border-white/[0.06] hover:border-white/[0.12] transition-colors cursor-pointer select-none">
+              <input type="checkbox" id="checkStep4" class="mt-1 w-4 h-4 rounded text-sky-500 bg-[#101319] border-white/20 focus:ring-0">
+              <div class="space-y-1 flex-1">
+                <div class="flex items-center justify-between">
+                  <span class="text-sm font-semibold text-white">Paso 4: ¡Disfrutar de StreamFlow!</span>
+                </div>
+                <p class="text-xs text-slate-400 leading-normal">
+                  La app StreamFlow IPTV estará disponible en tu pantalla de inicio como una aplicación nativa completa con soporte offline y aceleración gráfica.
+                </p>
+              </div>
+            </label>
+
+          </div>
+        </div>
+
+        <!-- ALTERNATIVE TOOLS (SideStore / AltStore / Sideloadly) -->
+        <div class="p-4 rounded-xl bg-[#161a22]/50 border border-white/[0.06] space-y-2">
+          <h4 class="text-xs font-semibold text-slate-300">¿Prefieres SideStore, AltStore o Sideloadly?</h4>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            También puedes importar el enlace directo al `.ipa` en <strong>SideStore</strong> directamente desde tu iPhone, o arrastrar el archivo `.ipa` en <strong>Sideloadly</strong> desde tu PC con Windows si dispones de cable USB.
+          </p>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- FOOTER NOTE -->
+    <div class="text-center text-xs text-slate-500 py-2">
+      StreamFlow IPTV • Motor Capacitor 8 con aceleración nativa iOS / iPadOS
+    </div>
+
+  </main>
+
+  <!-- JAVASCRIPT LOGIC -->
+  <script>
+    // Tab switching
+    const tab1 = document.getElementById('tabMethod1');
+    const tab2 = document.getElementById('tabMethod2');
+    const content1 = document.getElementById('contentMethod1');
+    const content2 = document.getElementById('contentMethod2');
+
+    tab1.addEventListener('click', () => {
+      tab1.className = 'flex-1 py-2.5 px-3 rounded-lg text-xs sm:text-sm font-semibold transition-all flex items-center justify-center gap-2 bg-sky-500 text-white shadow-sm';
+      tab2.className = 'flex-1 py-2.5 px-3 rounded-lg text-xs sm:text-sm font-semibold transition-all flex items-center justify-center gap-2 text-slate-400 hover:text-white';
+      content1.classList.remove('hidden');
+      content2.classList.add('hidden');
+    });
+
+    tab2.addEventListener('click', () => {
+      tab2.className = 'flex-1 py-2.5 px-3 rounded-lg text-xs sm:text-sm font-semibold transition-all flex items-center justify-center gap-2 bg-sky-500 text-white shadow-sm';
+      tab1.className = 'flex-1 py-2.5 px-3 rounded-lg text-xs sm:text-sm font-semibold transition-all flex items-center justify-center gap-2 text-slate-400 hover:text-white';
+      content2.classList.remove('hidden');
+      content1.classList.add('hidden');
+    });
+
+    // Copy URL helper
+    const copyUrlBtn = document.getElementById('copyUrlBtn');
+    const copyUrlText = document.getElementById('copyUrlText');
+    if (copyUrlBtn) {
+      copyUrlBtn.addEventListener('click', async () => {
+        try {
+          const appUrl = window.location.origin;
+          await navigator.clipboard.writeText(appUrl);
+          copyUrlText.textContent = '¡Enlace copiado!';
+          setTimeout(() => { copyUrlText.textContent = 'Copiar Enlace para Safari'; }, 2500);
+        } catch (e) {
+          copyUrlText.textContent = window.location.origin;
+        }
+      });
+    }
+
+    // Dynamic QR code generation for desktop
+    const qrCanvas = document.getElementById('qrCanvas');
+    const qrUrlDisplay = document.getElementById('qrUrlDisplay');
+    const currentUrl = window.location.href;
+    if (qrUrlDisplay) qrUrlDisplay.textContent = currentUrl;
+
+    if (qrCanvas && typeof QRCode !== 'undefined') {
+      QRCode.toCanvas(qrCanvas, currentUrl, {
+        width: 144,
+        margin: 1,
+        color: {
+          dark: '#090b0f',
+          light: '#ffffff'
+        }
+      }, function (error) {
+        if (error) console.error(error);
+      });
+    }
+
+    // Interactive checklist persistence
+    ['checkStep1', 'checkStep2', 'checkStep3', 'checkStep4'].forEach(id => {
+      const checkbox = document.getElementById(id);
+      if (checkbox) {
+        checkbox.checked = localStorage.getItem('streamflow_' + id) === 'true';
+        checkbox.addEventListener('change', (e) => {
+          localStorage.setItem('streamflow_' + id, String(e.target.checked));
+        });
+      }
+    });
+
+    // Auto-detect mobile device: If accessed from mobile, hide the desktop QR card to streamline view
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    if (isMobile) {
+      const qrBox = document.getElementById('desktopQrBox');
+      if (qrBox) qrBox.classList.add('hidden');
+    }
+  </script>
+</body>
+</html>
