@@ -21,16 +21,23 @@ jobs:
           node-version: 20
           cache: 'npm'
 
-      - name: Install Node Dependencies
-        run: npm install
+      - name: Install Node Dependencies (including TypeScript & Capacitor)
+        run: npm install --include=dev
 
       - name: Sync Capacitor iOS Project
         run: npx cap sync ios
 
       - name: Build & Archive with Xcode (Unsigned for Sideloading)
         run: |
+          if [ -d "ios/App/App.xcworkspace" ]; then
+            TARGET_FLAG="-workspace ios/App/App.xcworkspace"
+          else
+            TARGET_FLAG="-project ios/App/App.xcodeproj"
+          fi
+          echo "Using target: $TARGET_FLAG"
+
           xcodebuild archive \
-            -workspace ios/App/App.xcworkspace \
+            $TARGET_FLAG \
             -scheme App \
             -configuration Release \
             -destination 'generic/platform=iOS' \
