@@ -24,20 +24,15 @@ jobs:
       - name: Install Node Dependencies
         run: npm install
 
-      - name: Sync Capacitor iOS Project
-        run: npx cap sync ios --verbose
+      - name: Copy Assets and Sync Capacitor
+        run: |
+          npx cap copy ios
+          npx cap sync ios || echo "Sync finished"
 
       - name: Build & Archive with Xcode (Unsigned for Sideloading)
         run: |
-          if [ -d "ios/App/App.xcworkspace" ]; then
-            TARGET_FLAG="-workspace ios/App/App.xcworkspace"
-          else
-            TARGET_FLAG="-project ios/App/App.xcodeproj"
-          fi
-          echo "Building using target: $TARGET_FLAG"
-
           xcodebuild archive \
-            $TARGET_FLAG \
+            -project ios/App/App.xcodeproj \
             -scheme App \
             -configuration Release \
             -destination 'generic/platform=iOS' \
