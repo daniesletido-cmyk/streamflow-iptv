@@ -27,6 +27,7 @@ const App = {
     this.bindDomEvents();
     this.initInfiniteScroll();
     this.registerServiceWorker();
+    this.initIosBanner();
     this.loadServerInfo();
 
     this.activeProfile = Storage.getActiveProfile();
@@ -1451,6 +1452,30 @@ const App = {
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
+  },
+
+  initIosBanner() {
+    const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    const isStandalone = window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches;
+    const isCapacitor = typeof window.Capacitor !== 'undefined' && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();
+    const dismissedUntil = localStorage.getItem('streamflow_hide_ios_banner');
+
+    if (isIos && !isStandalone && !isCapacitor && (!dismissedUntil || Date.now() > Number(dismissedUntil))) {
+      const banner = document.getElementById('iosSmartBanner');
+      if (banner) {
+        setTimeout(() => banner.classList.remove('hidden'), 2200);
+      }
+    }
+
+    document.getElementById('showIosGuideBtn')?.addEventListener('click', () => {
+      document.getElementById('iosSmartBanner')?.classList.add('hidden');
+      this.openIosModal();
+    });
+
+    document.getElementById('dismissIosBannerBtn')?.addEventListener('click', () => {
+      document.getElementById('iosSmartBanner')?.classList.add('hidden');
+      localStorage.setItem('streamflow_hide_ios_banner', String(Date.now() + 7 * 86400000));
+    });
   }
 };
 

@@ -3,3 +3,11 @@ node_modules/
 .DS_Store
 
 .vercel
+
+# Capacitor & Xcode build artifacts
+*.xcuserdata/
+*.xcscmblueprint
+build/
+Payload/
+*.ipa
+ios/DerivedData/

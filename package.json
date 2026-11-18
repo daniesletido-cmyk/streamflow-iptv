@@ -4,16 +4,31 @@
   "description": "Custom modern IPTV Player for PC, iPad and iPhone with Xtream Codes API",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "cap:sync": "cap sync ios",
+    "cap:open": "cap open ios"
   },
   "engines": {
     "node": ">=20.0.0"
   },
-  "keywords": ["iptv", "xtream", "player", "pwa", "hls"],
+  "keywords": [
+    "iptv",
+    "xtream",
+    "player",
+    "pwa",
+    "hls"
+  ],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@capacitor/cli": "^8.6.2",
+    "@capacitor/core": "^8.6.2",
+    "@capacitor/ios": "^8.6.2",
     "cors": "^2.8.5",
     "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2"
   }
 }
