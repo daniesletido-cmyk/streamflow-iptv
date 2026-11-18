@@ -40,18 +40,28 @@ const Storage = {
     return null;
   },
 
+  normalizeProfile(profile) {
+    if (!profile) return profile;
+    const p = { ...profile };
+    if (p.serverUrl && p.serverUrl.includes('westream.sbs')) {
+      p.serverUrl = p.serverUrl.replace('westream.sbs', '81.31.194.120');
+    }
+    return p;
+  },
+
   saveProfile(profile) {
+    const normalized = this.normalizeProfile(profile);
     const profiles = this.getProfiles();
-    const existingIndex = profiles.findIndex(p => p.id === profile.id);
+    const existingIndex = profiles.findIndex(p => p.id === normalized.id);
     if (existingIndex >= 0) {
-      profiles[existingIndex] = { ...profiles[existingIndex], ...profile };
+      profiles[existingIndex] = { ...profiles[existingIndex], ...normalized };
     } else {
-      profile.id = profile.id || 'prof_' + Date.now();
-      profiles.push(profile);
+      normalized.id = normalized.id || 'prof_' + Date.now();
+      profiles.push(normalized);
     }
     localStorage.setItem(this.KEYS.PROFILES, JSON.stringify(profiles));
-    this.setCookieProfile(profile);
-    return profile;
+    this.setCookieProfile(normalized);
+    return normalized;
   },
 
   deleteProfile(id) {
@@ -68,16 +78,17 @@ const Storage = {
     const activeId = this.getActiveProfileId();
     if (activeId) {
       const found = profiles.find(p => p.id === activeId);
-      if (found) return found;
+      if (found) return this.normalizeProfile(found);
     }
-    if (profiles.length > 0) return profiles[0];
+    if (profiles.length > 0) return this.normalizeProfile(profiles[0]);
 
     // Fallback: check 10-year persistent cookie
     const fromCookie = this.getCookieProfile();
     if (fromCookie) {
-      this.saveProfile(fromCookie);
-      this.setActiveProfileId(fromCookie.id);
-      return fromCookie;
+      const norm = this.normalizeProfile(fromCookie);
+      this.saveProfile(norm);
+      this.setActiveProfileId(norm.id);
+      return norm;
     }
 
     return null;
@@ -404,3 +415,91 @@ const Storage = {
     localStorage.setItem(this.KEYS.SETTINGS, JSON.stringify({ ...current, ...settings }));
   }
 };
+
+// High performance IndexedDB Catalog Cache with TTL (30 minutes)
+const CatalogCache = {
+  DB_NAME: 'StreamFlowCatalogCache',
+  DB_VERSION: 1,
+  STORE_NAME: 'catalog',
+  DEFAULT_TTL: 30 * 60 * 1000, // 30 minutes
+
+  _dbPromise: null,
+
+  async getDb() {
+    if (this._dbPromise) return this._dbPromise;
+    this._dbPromise = new Promise((resolve) => {
+      if (typeof window === 'undefined' || !window.indexedDB) {
+        return resolve(null);
+      }
+      const request = indexedDB.open(this.DB_NAME, this.DB_VERSION);
+      request.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains(this.STORE_NAME)) {
+          db.createObjectStore(this.STORE_NAME, { keyPath: 'key' });
+        }
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => resolve(null);
+    });
+    return this._dbPromise;
+  },
+
+  async get(key) {
+    try {
+      const db = await this.getDb();
+      if (!db) return null;
+      return new Promise((resolve) => {
+        const tx = db.transaction(this.STORE_NAME, 'readonly');
+        const store = tx.objectStore(this.STORE_NAME);
+        const req = store.get(key);
+        req.onsuccess = () => {
+          const record = req.result;
+          if (record && record.timestamp && (Date.now() - record.timestamp < (record.ttl || this.DEFAULT_TTL))) {
+            resolve(record.data);
+          } else {
+            resolve(null);
+          }
+        };
+        req.onerror = () => resolve(null);
+      });
+    } catch (e) {
+      return null;
+    }
+  },
+
+  async set(key, data, ttlMs = this.DEFAULT_TTL) {
+    try {
+      const db = await this.getDb();
+      if (!db) return false;
+      return new Promise((resolve) => {
+        const tx = db.transaction(this.STORE_NAME, 'readwrite');
+        const store = tx.objectStore(this.STORE_NAME);
+        store.put({
+          key: key,
+          data: data,
+          timestamp: Date.now(),
+          ttl: ttlMs
+        });
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => resolve(false);
+      });
+    } catch (e) {
+      return false;
+    }
+  },
+
+  async clear() {
+    try {
+      const db = await this.getDb();
+      if (!db) return;
+      return new Promise((resolve) => {
+        const tx = db.transaction(this.STORE_NAME, 'readwrite');
+        const store = tx.objectStore(this.STORE_NAME);
+        store.clear();
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => resolve(false);
+      });
+    } catch (e) {}
+  }
+};
+

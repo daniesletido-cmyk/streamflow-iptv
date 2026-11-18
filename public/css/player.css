@@ -91,6 +91,34 @@
 /* Video element styles */
 #mainVideo {
   background-color: #000000;
+  opacity: 0;
+  transition: opacity 0.22s ease-out;
+}
+#mainVideo.video-ready {
+  opacity: 1;
+}
+
+/* VOD Timeline range input */
+#vodSeekSlider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  background-color: #38bdf8;
+  cursor: pointer;
+  box-shadow: 0 0 6px rgba(56, 189, 248, 0.6);
+  transition: transform 0.15s ease;
+}
+#vodSeekSlider::-webkit-slider-thumb:hover {
+  transform: scale(1.25);
+}
+#vodSeekSlider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  background-color: #38bdf8;
+  cursor: pointer;
+  border: none;
 }
 
 /* Modal animation */

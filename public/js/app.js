@@ -134,6 +134,14 @@ const App = {
     document.getElementById('profileBtn')?.addEventListener('click', () => this.openLoginModal());
     document.getElementById('settingsBtn')?.addEventListener('click', () => this.openSettingsModal());
     document.getElementById('iosInstallBtn')?.addEventListener('click', () => this.openIosModal());
+    document.getElementById('refreshCatalogBtn')?.addEventListener('click', async () => {
+      if (typeof CatalogCache !== 'undefined') {
+        await CatalogCache.clear();
+      }
+      this.showToast('Actualizando catálogo...');
+      await this.loadCurrentTab(true);
+      this.showToast('✓ Catálogo actualizado');
+    });
     document.getElementById('favoriteCountryBtn')?.addEventListener('click', () => this.toggleCategoryFavorites());
     document.getElementById('clearFavoritesBtn')?.addEventListener('click', () => this.handleClearFavorites());
     document.querySelectorAll('.close-modal-btn').forEach(btn => {
@@ -312,7 +320,7 @@ const App = {
     });
   },
 
-  async loadCurrentTab() {
+  async loadCurrentTab(forceRefresh = false) {
     this.showLoadingGrid(true);
 
     // Reset category search input
@@ -346,10 +354,10 @@ const App = {
     }
 
     try {
-      // Parallel loading: fetch categories and streams at the same time
+      // Parallel loading: fetch categories and streams at the same time (using IndexedDB cache)
       const [cats, streams] = await Promise.all([
-        Api.getCategories(this.activeProfile, this.currentTab),
-        Api.getStreams(this.activeProfile, this.currentTab)
+        Api.getCategories(this.activeProfile, this.currentTab, forceRefresh),
+        Api.getStreams(this.activeProfile, this.currentTab, null, forceRefresh)
       ]);
 
       this.categories = cats || [];

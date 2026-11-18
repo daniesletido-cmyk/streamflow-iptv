@@ -46,42 +46,75 @@ const Api = {
     }
   ],
 
+  cleanUrl(url) {
+    if (!url) return '';
+    let cleaned = url.trim().replace(/\/+$/, '');
+    if (cleaned.includes('westream.sbs')) {
+      cleaned = cleaned.replace('westream.sbs', '81.31.194.120');
+    }
+    return cleaned;
+  },
+
   async testConnection(serverUrl, username, password) {
     const res = await fetch('/api/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ serverUrl, username, password })
+      body: JSON.stringify({ serverUrl: this.cleanUrl(serverUrl), username, password })
     });
     return await res.json();
   },
 
-  async getCategories(profile, type = 'live') {
+  async getCategories(profile, type = 'live', forceRefresh = false) {
     if (profile.isDemo) {
       return [{ category_id: 'demo', category_name: 'Canales Demo Gratuitos' }];
     }
+    const serverUrl = this.cleanUrl(profile.serverUrl);
+    const cacheKey = `cats_${profile.username}_${type}`;
+
+    if (!forceRefresh && typeof CatalogCache !== 'undefined') {
+      const cached = await CatalogCache.get(cacheKey);
+      if (cached && Array.isArray(cached) && cached.length > 0) {
+        return cached;
+      }
+    }
+
     const res = await fetch('/api/categories', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        serverUrl: profile.serverUrl,
+        serverUrl,
         username: profile.username,
         password: profile.password,
         type
       })
     });
     const data = await res.json();
-    return data.categories || [];
+    const categories = data.categories || [];
+    if (categories.length > 0 && typeof CatalogCache !== 'undefined') {
+      CatalogCache.set(cacheKey, categories, 30 * 60 * 1000);
+    }
+    return categories;
   },
 
-  async getStreams(profile, type = 'live', categoryId = null) {
+  async getStreams(profile, type = 'live', categoryId = null, forceRefresh = false) {
     if (profile.isDemo) {
       return this.DEMO_CHANNELS;
     }
+    const serverUrl = this.cleanUrl(profile.serverUrl);
+    const cacheKey = `str_${profile.username}_${type}_${categoryId || 'all'}`;
+
+    if (!forceRefresh && typeof CatalogCache !== 'undefined') {
+      const cached = await CatalogCache.get(cacheKey);
+      if (cached && Array.isArray(cached) && cached.length > 0) {
+        return cached;
+      }
+    }
+
     const res = await fetch('/api/streams', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        serverUrl: profile.serverUrl,
+        serverUrl,
         username: profile.username,
         password: profile.password,
         type,
@@ -89,22 +122,37 @@ const Api = {
       })
     });
     const data = await res.json();
-    return data.streams || [];
+    const streams = data.streams || [];
+    if (streams.length > 0 && typeof CatalogCache !== 'undefined') {
+      CatalogCache.set(cacheKey, streams, 30 * 60 * 1000);
+    }
+    return streams;
   },
 
   async getSeriesInfo(profile, seriesId) {
     if (profile.isDemo) return null;
+    const serverUrl = this.cleanUrl(profile.serverUrl);
+    const cacheKey = `series_${profile.username}_${seriesId}`;
+
+    if (typeof CatalogCache !== 'undefined') {
+      const cached = await CatalogCache.get(cacheKey);
+      if (cached) return cached;
+    }
+
     const res = await fetch('/api/series-info', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        serverUrl: profile.serverUrl,
+        serverUrl,
         username: profile.username,
         password: profile.password,
         seriesId
       })
     });
     const data = await res.json();
+    if (data.info && typeof CatalogCache !== 'undefined') {
+      CatalogCache.set(cacheKey, data.info, 60 * 60 * 1000); // 1 hour for series details
+    }
     return data.info;
   },
 
@@ -140,7 +188,7 @@ const Api = {
       };
     }
 
-    const base = profile.serverUrl.replace(/\/+$/, '');
+    const base = this.cleanUrl(profile.serverUrl);
     const user = encodeURIComponent(profile.username);
     const pass = encodeURIComponent(profile.password);
     const id = item.stream_id;

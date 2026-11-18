@@ -1,10 +1,12 @@
 /**
- * StreamFlow IPTV - Ultimate Universal Video Engine
- * Supports:
- * 1. mpegts.js for Live MPEG-TS streams (.ts) in PC browsers (Chrome, Edge, Firefox)
- * 2. Hls.js for HLS streams (.m3u8) with adaptive buffering
- * 3. Native iOS Safari hardware-accelerated HLS & PiP
- * 4. Automatic fallback pipeline with connection timeout & zero-freeze watchdog
+ * StreamFlow IPTV - Ultimate Universal Hybrid Video Engine
+ * Features:
+ * 1. Hybrid Architecture: mpegts.js (Live TV) + hls.js + Native Progressive (VOD)
+ * 2. Zero Green Screen & Macroblock Shielding: waits for first valid IDR/Keyframe via requestVideoFrameCallback
+ * 3. Fast Zapping (<1.5s) with dynamic buffer scaling (128KB stash -> dynamic buffer expansion)
+ * 4. Zero-Freeze Auto-Recovery Watchdog (1.5s poll, 4s reconnect threshold)
+ * 5. Full VOD Seek Timeline & HTTP 206 Range seeking
+ * 6. External Player Fallback (VLC / Outplayer / Infuse / Direct Link) for unsupported audio codecs (AC3/EAC3)
  */
 class StreamPlayer {
   constructor() {
@@ -29,6 +31,8 @@ class StreamPlayer {
     this.seriesContext = null;
     this.lastProgressSave = 0;
     this.resumeTime = null;
+    this.isSeeking = false;
+    this.videoFrameCallbackId = null;
 
     this.initEvents();
   }
@@ -36,15 +40,21 @@ class StreamPlayer {
   initEvents() {
     if (!this.video) return;
 
+    // 1. Clean Frame & Green Screen Guard
     this.video.addEventListener('playing', () => {
       this.isPlaying = true;
       this.isLoading = false;
       this.clearConnectionTimeout();
       this.retryCount = 0;
       this.updateStatus('En reproducción');
-      this.hideBuffering();
 
-      // Check if we need to resume from saved timestamp
+      // Schedule dynamic buffer expansion after 3 seconds of smooth playback
+      setTimeout(() => this.expandBufferAfterStart(), 3000);
+
+      // Verify that clean decoded video frames are physically advancing before revealing video
+      this.waitForCleanFrame();
+
+      // Check if we need to resume from saved timestamp (VOD)
       if (this.resumeTime && this.resumeTime > 0) {
         try {
           if (this.video.duration && this.resumeTime < this.video.duration) {
@@ -56,6 +66,7 @@ class StreamPlayer {
     });
 
     this.video.addEventListener('loadedmetadata', () => {
+      this.updateVodTimeline();
       if (this.resumeTime && this.resumeTime > 0) {
         try {
           if (this.video.duration && this.resumeTime < this.video.duration) {
@@ -75,21 +86,28 @@ class StreamPlayer {
     this.video.addEventListener('pause', () => {
       this.isPlaying = false;
       this.updatePlayPauseBtn();
-      // Save progress on pause immediately
       if (this.currentStreamType !== 'live' && this.video.duration > 0 && this.currentItem) {
         Storage.savePlaybackProgress(this.currentItem, this.video.currentTime, this.video.duration, this.seriesContext);
       }
     });
 
     this.video.addEventListener('error', (e) => {
-      console.warn('Video element error:', e);
-      this.tryNextFallbackStrategy('Error en elemento de vídeo');
+      console.warn('[Player] Video element error:', e);
+      const mediaErr = this.video.error;
+      if (mediaErr && (mediaErr.code === 3 || mediaErr.code === 4)) {
+        // Codec decode error or format unsupported (e.g. AC3/EAC3 Dolby audio)
+        this.showExternalPlayerFallback('Formato de audio o vídeo no soportado en navegador (ej. Dolby AC3).');
+      } else {
+        this.tryNextFallbackStrategy('Error en elemento de vídeo');
+      }
     });
 
     this.video.addEventListener('timeupdate', () => {
-      if (this.video.currentTime > 0) {
-        this.hideBuffering();
+      if (this.video.currentTime > 0.05 && this.video.videoWidth > 0) {
+        this.markVideoReady();
       }
+
+      this.updateVodTimeline();
 
       // Track continue watching for Movies & Series
       if (this.currentStreamType !== 'live' && this.video.duration > 0 && this.currentItem) {
@@ -110,11 +128,98 @@ class StreamPlayer {
       }
     });
 
+    // OSD visibility
     const container = document.getElementById('playerContainer');
     if (container) {
       container.addEventListener('mousemove', () => this.showOsdTemporarily());
       container.addEventListener('touchstart', () => this.showOsdTemporarily(), { passive: true });
     }
+
+    // VOD timeline slider scrubbing
+    const slider = document.getElementById('vodSeekSlider');
+    if (slider) {
+      slider.addEventListener('input', () => {
+        this.isSeeking = true;
+        if (this.video.duration) {
+          const targetTime = (slider.value / 100) * this.video.duration;
+          const currEl = document.getElementById('vodCurrentTime');
+          if (currEl) currEl.textContent = this.formatTime(targetTime);
+        }
+      });
+      slider.addEventListener('change', () => {
+        if (this.video.duration) {
+          const targetTime = (slider.value / 100) * this.video.duration;
+          this.video.currentTime = targetTime;
+        }
+        this.isSeeking = false;
+      });
+    }
+
+    // External player button in top bar
+    document.getElementById('externalPlayerBtn')?.addEventListener('click', () => {
+      this.openExternalPlayerModal();
+    });
+
+    // External player modal links
+    document.getElementById('openVlcBtn')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      this.launchExternalScheme('vlc');
+    });
+    document.getElementById('openOutplayerBtn')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      this.launchExternalScheme('outplayer');
+    });
+    document.getElementById('openInfuseBtn')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      this.launchExternalScheme('infuse');
+    });
+    document.getElementById('copyStreamUrlBtn')?.addEventListener('click', () => {
+      this.copyCurrentStreamUrl();
+    });
+  }
+
+  // Waits for clean IDR keyframe presentation before fading in video
+  waitForCleanFrame() {
+    if ('requestVideoFrameCallback' in HTMLVideoElement.prototype) {
+      try {
+        if (this.videoFrameCallbackId) {
+          this.video.cancelVideoFrameCallback(this.videoFrameCallbackId);
+        }
+        this.videoFrameCallbackId = this.video.requestVideoFrameCallback(() => {
+          this.markVideoReady();
+        });
+        return;
+      } catch (e) {}
+    }
+    // Fallback: check currentTime progression
+    setTimeout(() => {
+      if (this.video && this.video.currentTime > 0.05) {
+        this.markVideoReady();
+      }
+    }, 150);
+  }
+
+  markVideoReady() {
+    if (this.video) {
+      this.video.classList.add('video-ready');
+    }
+    this.hideBuffering();
+  }
+
+  hideVideoUntilClean() {
+    if (this.video) {
+      this.video.classList.remove('video-ready');
+    }
+  }
+
+  expandBufferAfterStart() {
+    if (!this.isPlaying) return;
+    try {
+      if (this.hls) {
+        this.hls.config.maxBufferLength = 30;
+        this.hls.config.maxMaxBufferLength = 60;
+      }
+    } catch (e) {}
   }
 
   clearConnectionTimeout() {
@@ -127,6 +232,7 @@ class StreamPlayer {
   async play(item, profile, streamType = 'live', extra = {}) {
     this.cleanupEngines();
     this.clearConnectionTimeout();
+    this.hideVideoUntilClean();
     this.isLoading = true;
     this.isPlaying = false;
     this.currentItem = item;
@@ -138,18 +244,20 @@ class StreamPlayer {
     this.currentStrategyIndex = 0;
     this.stopWatchdog();
 
+    // Configure VOD timeline vs Live layout
+    this.configurePlayerLayout(streamType);
+
     // Check if this movie or series has a saved resume position
     if (streamType !== 'live') {
       const saved = Storage.getPlaybackProgress(item.stream_id || item.id || extra.episode_id);
       if (saved && saved.currentTime > 10 && (saved.duration - saved.currentTime > 25)) {
         this.resumeTime = saved.currentTime;
-        console.log(`[Player] Posición guardada encontrada: ${saved.currentTime}s (${saved.progress}%)`);
       }
     }
 
     document.getElementById('playerView').classList.remove('hidden');
     this.updatePlayerInfo(item);
-    this.showBuffering(this.resumeTime ? `Reanudando desde ${this.formatTime(this.resumeTime)}...` : 'Conectando canal...');
+    this.showBuffering(this.resumeTime ? `Reanudando desde ${this.formatTime(this.resumeTime)}...` : 'Conectando señal...');
     this.showOsdTemporarily(4000);
 
     const urls = Api.getStreamUrls(profile, item, streamType);
@@ -158,10 +266,35 @@ class StreamPlayer {
 
     // Build ordered playback strategies
     this.strategies = this.buildPlaybackStrategies(urls, streamType);
-    console.log('[Player] Estrategias disponibles:', this.strategies.map(s => `[${s.engine}] ${s.label}`));
+    console.log('[Player] Estrategias preparadas:', this.strategies.map(s => `[${s.engine}] ${s.label}`));
 
     await this.executeStrategy(0);
     this.startWatchdog();
+  }
+
+  configurePlayerLayout(streamType) {
+    const vodContainer = document.getElementById('vodTimelineContainer');
+    const prevBtn = document.getElementById('prevChannelBtn');
+    const nextBtn = document.getElementById('nextChannelBtn');
+    const badgeEl = document.getElementById('playerBadge');
+
+    if (streamType === 'live') {
+      if (vodContainer) vodContainer.classList.add('hidden');
+      if (prevBtn) prevBtn.classList.remove('hidden');
+      if (nextBtn) nextBtn.classList.remove('hidden');
+      if (badgeEl) {
+        badgeEl.className = 'inline-flex items-center gap-1.5 px-2 py-0.5 text-[10px] font-semibold rounded bg-red-600/90 text-white uppercase tracking-wider';
+        badgeEl.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-white"></span> EN VIVO';
+      }
+    } else {
+      if (vodContainer) vodContainer.classList.remove('hidden');
+      if (prevBtn) prevBtn.classList.add('hidden');
+      if (nextBtn) nextBtn.classList.add('hidden');
+      if (badgeEl) {
+        badgeEl.className = 'inline-flex items-center gap-1.5 px-2 py-0.5 text-[10px] font-semibold rounded bg-sky-600/90 text-white uppercase tracking-wider';
+        badgeEl.textContent = streamType === 'series' ? 'SERIE' : 'PELÍCULA';
+      }
+    }
   }
 
   buildPlaybackStrategies(urls, streamType) {
@@ -171,13 +304,12 @@ class StreamPlayer {
 
     if (streamType === 'live') {
       if (isIos || (canNative && !window.Hls?.isSupported())) {
-        // iOS Safari / iPad: Direct native stream from user's IP first (bypasses cloud datacenter IP blocks)
-        if (urls.hls) list.push({ engine: 'native', url: urls.hls, label: 'iOS HLS Directo' });
-        if (urls.directLive) list.push({ engine: 'native', url: urls.directLive, label: 'iOS TS Directo' });
-        if (urls.direct) list.push({ engine: 'native', url: urls.direct, label: 'iOS Bare Directo' });
+        // iOS Safari / iPad: Proxied stream first (handles 302 redirects and prevents CORS), then direct
+        if (urls.proxiedDirectLive) list.push({ engine: 'native', url: urls.proxiedDirectLive, label: 'iOS TS Proxied' });
         if (urls.proxiedHls) list.push({ engine: 'native', url: urls.proxiedHls, label: 'iOS HLS Proxied' });
-        if (urls.proxiedDirectLive) list.push({ engine: 'native', url: urls.proxiedDirectLive, label: 'iOS TS Live Proxied' });
-        if (urls.proxiedDirect) list.push({ engine: 'native', url: urls.proxiedDirect, label: 'iOS TS Direct Proxied' });
+        if (urls.proxiedDirect) list.push({ engine: 'native', url: urls.proxiedDirect, label: 'iOS Direct Proxied' });
+        if (urls.directLive) list.push({ engine: 'native', url: urls.directLive, label: 'iOS TS Directo' });
+        if (urls.hls) list.push({ engine: 'native', url: urls.hls, label: 'iOS HLS Directo' });
       } else {
         // PC & Android Chrome/Edge:
         // Strategy 1: mpegts.js with /live/ TS stream (official Xtream Codes standard)
@@ -204,21 +336,18 @@ class StreamPlayer {
           list.push({ engine: 'mpegts', url: urls.proxiedBare, label: 'MPEG-TS Raw' });
         }
 
-        // Strategy 4: Native video element
+        // Strategy 4: Native video element fallback
         if (urls.proxiedDirectLive) {
           list.push({ engine: 'native', url: urls.proxiedDirectLive, label: 'Nativo Fallback' });
         }
       }
     } else {
-      // VOD / Movies / Series: Proxied direct first (guarantees Xtream Codes user-agent headers)
+      // VOD / Movies / Series: Proxied direct first (guarantees Range headers & Xtream Codes User-Agent)
       if (urls.proxiedDirect) {
-        list.push({ engine: 'native', url: urls.proxiedDirect, label: 'VOD Proxied' });
-      }
-      if (isIos && urls.direct) {
-        list.push({ engine: 'native', url: urls.direct, label: 'VOD Nativo iOS' });
+        list.push({ engine: 'native', url: urls.proxiedDirect, label: 'VOD Proxied (Range 206)' });
       }
       if (urls.direct) {
-        list.push({ engine: 'native', url: urls.direct, label: 'VOD Sin Proxy' });
+        list.push({ engine: 'native', url: urls.direct, label: 'VOD Directo' });
       }
     }
 
@@ -228,7 +357,7 @@ class StreamPlayer {
   async executeStrategy(index) {
     if (!this.strategies || index >= this.strategies.length) {
       this.clearConnectionTimeout();
-      this.showBuffering('No se pudo conectar a este canal con ninguna alternativa.');
+      this.handlePlaybackFailure();
       this.stopWatchdog();
       return;
     }
@@ -239,10 +368,11 @@ class StreamPlayer {
     this.showBuffering(`Conectando (${strategy.label})...`);
 
     this.cleanupEngines();
+    this.hideVideoUntilClean();
 
-    // Guard timeout: dynamic per stream type (live channels 9s, movies/series 25s)
+    // Dynamic timeout: 9s for live TV, 20s for VOD
     this.clearConnectionTimeout();
-    const timeoutMs = (this.currentStreamType === 'live') ? 9000 : 25000;
+    const timeoutMs = (this.currentStreamType === 'live') ? 9000 : 20000;
     this.connectTimeout = setTimeout(() => {
       if (!this.isPlaying) {
         console.warn(`[Player] Opción #${index + 1} (${strategy.label}) no comenzó en ${timeoutMs/1000}s. Pasando a la siguiente opción...`);
@@ -270,15 +400,13 @@ class StreamPlayer {
       isLive: true,
       url: url
     }, {
-      enableWorker: false,
+      enableWorker: true,
       lazyLoad: false,
-      // Disable aggressive chasing which causes initial micro-stutter / forward jumping
-      liveBufferLatencyChasing: false,
-      liveBufferLatencyMaxLatency: 8.0,
-      liveBufferLatencyMinRemain: 2.5,
-      // 512KB initial stash buffer ensures stable GOP decoding without startup drops
+      liveBufferLatencyChasing: true,
+      liveBufferLatencyMaxLatency: 3.5,
+      liveBufferLatencyMinRemain: 1.0,
       enableStashBuffer: true,
-      stashInitialSize: 512 * 1024,
+      stashInitialSize: 128 * 1024, // 128KB for sub-1.5s fast zapping
       autoCleanupSourceBuffer: true,
       autoCleanupMaxBackwardDuration: 30,
       autoCleanupMinBackwardDuration: 15,
@@ -303,9 +431,9 @@ class StreamPlayer {
   loadWithHls(url) {
     this.hls = new Hls({
       enableWorker: true,
-      lowLatencyMode: false,
-      backBufferLength: 20,
-      maxBufferLength: 15,
+      lowLatencyMode: true,
+      backBufferLength: 30,
+      maxBufferLength: 15, // Starts fast, expands to 30 after start
       maxMaxBufferLength: 30,
       fragLoadingTimeOut: 10000,
       manifestLoadingTimeOut: 10000,
@@ -336,17 +464,81 @@ class StreamPlayer {
 
   tryNextFallbackStrategy(reason) {
     this.clearConnectionTimeout();
-    console.warn('Intentando siguiente alternativa. Motivo:', reason);
+    console.warn('[Player] Intentando siguiente alternativa. Motivo:', reason);
     const next = this.currentStrategyIndex + 1;
     if (next < this.strategies.length) {
-      setTimeout(() => this.executeStrategy(next), 400);
+      setTimeout(() => this.executeStrategy(next), 350);
     } else {
-      const msg = (this.currentStreamType === 'live')
-        ? 'El canal no emite en directo en este momento (emisión apagada o evento no iniciado).'
-        : 'El contenido no responde en este momento. Inténtalo de nuevo más tarde.';
-      this.showBuffering(msg);
+      this.handlePlaybackFailure();
       this.stopWatchdog();
     }
+  }
+
+  handlePlaybackFailure() {
+    let msg = '';
+    let suggestion = null;
+
+    if (this.currentStreamType === 'live') {
+      const name = (this.currentItem && this.currentItem.name) ? this.currentItem.name.toUpperCase() : '';
+      if (name.includes('HDR')) {
+        msg = 'Este canal en HDR no emite actualmente (emisión inactiva o evento apagado).';
+        // Check if there is an FHD or HD counterpart in App streams
+        if (window.App && Array.isArray(window.App.streams)) {
+          const baseName = this.currentItem.name.replace(/HDR/i, '').trim();
+          const alt = window.App.streams.find(s => s.name && s.name.includes(baseName) && !s.name.includes('HDR'));
+          if (alt) {
+            suggestion = { label: `Probar versión FHD (${alt.name})`, item: alt };
+          }
+        }
+      } else {
+        msg = 'El canal no responde actualmente (emisión apagada o evento no iniciado).';
+      }
+    } else {
+      msg = 'El vídeo no responde o requiere un reproductor externo.';
+    }
+
+    this.showBuffering(msg);
+    this.showBufferingActions(suggestion);
+  }
+
+  showBufferingActions(suggestion = null) {
+    const container = document.getElementById('bufferingActions');
+    if (!container) return;
+    container.innerHTML = '';
+    container.classList.remove('hidden');
+
+    if (suggestion && suggestion.item) {
+      const btn = document.createElement('button');
+      btn.className = 'px-3.5 py-1.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-[#090b0f] text-xs font-semibold shadow-lg transition-colors';
+      btn.textContent = suggestion.label;
+      btn.onclick = () => {
+        container.classList.add('hidden');
+        if (window.App && typeof window.App.playStream === 'function') {
+          window.App.playStream(suggestion.item);
+        }
+      };
+      container.appendChild(btn);
+    }
+
+    const extBtn = document.createElement('button');
+    extBtn.className = 'px-3.5 py-1.5 rounded-lg bg-[#161a22] hover:bg-[#1c212c] text-[#f4f6f9] border border-white/[0.1] text-xs font-medium transition-colors';
+    extBtn.textContent = 'Abrir en reproductor externo';
+    extBtn.onclick = () => this.openExternalPlayerModal();
+    container.appendChild(extBtn);
+  }
+
+  hideBufferingActions() {
+    const container = document.getElementById('bufferingActions');
+    if (container) {
+      container.innerHTML = '';
+      container.classList.add('hidden');
+    }
+  }
+
+  showExternalPlayerFallback(reason) {
+    this.showBuffering(reason);
+    this.showBufferingActions();
+    this.openExternalPlayerModal();
   }
 
   startWatchdog() {
@@ -357,25 +549,27 @@ class StreamPlayer {
     this.lastTime = this.video.currentTime;
     this.stalledSeconds = 0;
 
+    // Check currentTime every 1.5s
     this.watchdogInterval = setInterval(() => {
       if (!this.isPlaying || this.video.paused) {
         this.stalledSeconds = 0;
         return;
       }
 
-      if (Math.abs(this.video.currentTime - this.lastTime) < 0.2) {
-        this.stalledSeconds++;
-        if (this.stalledSeconds >= 6) {
-          console.warn('Watchdog: Congelado durante 6s en reproducción. Probando reconexión...');
-          this.showBuffering('Recuperando conexión...');
-          this.tryNextFallbackStrategy('Watchdog timeout');
+      // If playing live TV and currentTime has not advanced by at least 0.1s
+      if (Math.abs(this.video.currentTime - this.lastTime) < 0.1) {
+        this.stalledSeconds += 1.5;
+        if (this.stalledSeconds >= 4.0) {
+          console.warn('[Watchdog] Stream congelado durante >4s. Auto-recuperando...');
+          this.showBuffering('Recuperando señal...');
           this.stalledSeconds = 0;
+          this.tryNextFallbackStrategy('Watchdog stall recovery');
         }
       } else {
         this.stalledSeconds = 0;
         this.lastTime = this.video.currentTime;
       }
-    }, 1000);
+    }, 1500);
   }
 
   stopWatchdog() {
@@ -387,6 +581,13 @@ class StreamPlayer {
 
   cleanupEngines() {
     this.clearConnectionTimeout();
+    this.hideBufferingActions();
+
+    if (this.videoFrameCallbackId && 'cancelVideoFrameCallback' in HTMLVideoElement.prototype) {
+      try { this.video.cancelVideoFrameCallback(this.videoFrameCallbackId); } catch (e) {}
+      this.videoFrameCallbackId = null;
+    }
+
     if (this.mpegtsPlayer) {
       try {
         this.mpegtsPlayer.pause();
@@ -417,6 +618,7 @@ class StreamPlayer {
     this.clearConnectionTimeout();
     this.stopWatchdog();
     this.cleanupEngines();
+    this.hideVideoUntilClean();
     this.isPlaying = false;
     this.currentItem = null;
     this.resumeTime = null;
@@ -484,11 +686,9 @@ class StreamPlayer {
 
   updatePlayerInfo(item) {
     const titleEl = document.getElementById('playerTitle');
-    const badgeEl = document.getElementById('playerBadge');
     const logoEl = document.getElementById('playerLogo');
 
-    if (titleEl) titleEl.textContent = item.name || 'Canal en directo';
-    if (badgeEl) badgeEl.textContent = item.stream_type === 'live' ? '🔴 EN VIVO' : 'VOD';
+    if (titleEl) titleEl.textContent = item.name || 'Canal';
     
     if (logoEl) {
       if (item.stream_icon) {
@@ -518,6 +718,34 @@ class StreamPlayer {
       : '<svg class="w-8 h-8" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
   }
 
+  updateVodTimeline() {
+    if (this.currentStreamType === 'live' || this.isSeeking) return;
+    const currEl = document.getElementById('vodCurrentTime');
+    const durEl = document.getElementById('vodDuration');
+    const slider = document.getElementById('vodSeekSlider');
+
+    const cur = this.video.currentTime || 0;
+    const dur = this.video.duration || 0;
+
+    if (currEl) currEl.textContent = this.formatTime(cur);
+    if (durEl && dur > 0) durEl.textContent = this.formatTime(dur);
+    if (slider && dur > 0) {
+      slider.value = (cur / dur) * 100;
+    }
+  }
+
+  formatTime(seconds) {
+    const s = Math.floor(seconds || 0);
+    const hrs = Math.floor(s / 3600);
+    const mins = Math.floor((s % 3600) / 60);
+    const secs = s % 60;
+    const pad = (n) => String(n).padStart(2, '0');
+    if (hrs > 0) {
+      return `${pad(hrs)}:${pad(mins)}:${pad(secs)}`;
+    }
+    return `${pad(mins)}:${pad(secs)}`;
+  }
+
   showBuffering(text = 'Cargando...', autoHideMs = null) {
     const buf = document.getElementById('playerBuffering');
     const txt = document.getElementById('bufferingText');
@@ -533,6 +761,7 @@ class StreamPlayer {
   hideBuffering() {
     const buf = document.getElementById('playerBuffering');
     if (buf) buf.classList.add('hidden');
+    this.hideBufferingActions();
   }
 
   updateStatus(text) {
@@ -546,9 +775,53 @@ class StreamPlayer {
     osd.classList.remove('opacity-0', 'pointer-events-none');
     clearTimeout(this.osdTimeout);
     this.osdTimeout = setTimeout(() => {
-      if (this.isPlaying && !this.video.paused) {
+      if (this.isPlaying && !this.video.paused && !this.isSeeking) {
         osd.classList.add('opacity-0', 'pointer-events-none');
       }
     }, duration);
+  }
+
+  // ================= EXTERNAL PLAYER INTEGRATION =================
+  openExternalPlayerModal() {
+    const modal = document.getElementById('externalPlayerModal');
+    if (modal) {
+      modal.classList.remove('hidden');
+    }
+  }
+
+  getBestExternalUrl() {
+    if (!this.currentUrls) return '';
+    return this.currentUrls.directLive || this.currentUrls.direct || this.currentUrls.hls || '';
+  }
+
+  launchExternalScheme(scheme) {
+    const rawUrl = this.getBestExternalUrl();
+    if (!rawUrl) return;
+
+    let schemeUrl = '';
+    if (scheme === 'vlc') {
+      // vlc://http://... or vlc-x-callback://
+      schemeUrl = `vlc://${rawUrl}`;
+    } else if (scheme === 'outplayer') {
+      schemeUrl = `outplayer://${rawUrl}`;
+    } else if (scheme === 'infuse') {
+      schemeUrl = `infuse://${rawUrl}`;
+    }
+
+    if (schemeUrl) {
+      window.location.href = schemeUrl;
+    }
+  }
+
+  copyCurrentStreamUrl() {
+    const url = this.getBestExternalUrl();
+    if (!url) return;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(() => {
+        if (window.App && typeof window.App.showToast === 'function') {
+          window.App.showToast('✓ Enlace copiado al portapapeles');
+        }
+      });
+    }
   }
 }

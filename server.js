@@ -69,7 +69,12 @@ function cleanServerUrl(rawUrl) {
   if (!url.startsWith('http://') && !url.startsWith('https://')) {
     url = 'http://' + url;
   }
-  return url.replace(/\/+$/, '');
+  url = url.replace(/\/+$/, '');
+  // Map known ISP-blocked domains to their direct IP to bypass Spanish ISP DPI blocks (HTTP 451)
+  if (url.includes('westream.sbs')) {
+    url = url.replace('westream.sbs', '81.31.194.120');
+  }
+  return url;
 }
 
 // 0. Server Info & Dynamic Local IPs
@@ -279,8 +284,17 @@ app.post('/api/epg', async (req, res) => {
   }
 });
 
-// 6. Transparent Media Stream Proxy with Server-Side Redirect Following & Logging
-function handleStreamProxy(targetUrl, req, res, redirectDepth = 0) {
+// 6. Transparent Media Stream Proxy with Server-Side Redirect Following & Range (HTTP 206) Support
+function sanitizeStreamUrl(targetUrl) {
+  let url = targetUrl || '';
+  if (url.includes('westream.sbs')) {
+    url = url.replace('westream.sbs', '81.31.194.120');
+  }
+  return url;
+}
+
+function handleStreamProxy(rawTargetUrl, req, res, redirectDepth = 0) {
+  const targetUrl = sanitizeStreamUrl(rawTargetUrl);
   if (redirectDepth > 6) {
     console.error(`[STREAM PROXY] Demasiadas redirecciones: ${targetUrl}`);
     return res.status(508).send('Demasiadas redirecciones en el stream');
@@ -303,26 +317,38 @@ function handleStreamProxy(targetUrl, req, res, redirectDepth = 0) {
     'Connection': 'keep-alive'
   };
 
+  // If connecting to direct IP, enforce IP Host header to prevent ISP DPI inspection
+  if (parsedUrl.hostname === '81.31.194.120') {
+    requestHeaders['Host'] = '81.31.194.120';
+  }
+
   const clientIp = (req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || req.socket?.remoteAddress || '').split(',')[0].trim();
   if (clientIp) {
     requestHeaders['X-Forwarded-For'] = clientIp;
     requestHeaders['X-Real-IP'] = clientIp;
   }
 
+  // Forward Range header from client for VOD seeking (HTTP 206)
   if (req.headers.range) {
     requestHeaders['Range'] = req.headers.range;
   }
 
-  console.log(`[STREAM PROXY #${redirectDepth}] Solicitando: ${targetUrl}`);
+  console.log(`[STREAM PROXY #${redirectDepth}] Solicitando: ${targetUrl} (Range: ${req.headers.range || 'none'})`);
 
   const proxyReq = client.request(parsedUrl, {
     method: 'GET',
     agent: agent,
     headers: requestHeaders
   }, (proxyRes) => {
-    console.log(`[STREAM PROXY] Respuesta de IPTV: ${proxyRes.statusCode} (${proxyRes.headers['content-type'] || 'sin content-type'})`);
+    console.log(`[STREAM PROXY] Respuesta IPTV: ${proxyRes.statusCode} (${proxyRes.headers['content-type'] || 'sin content-type'})`);
 
-    // Follow HTTP redirects server-side directly
+    // Handle ISP block 451: if encountered, attempt IP fallback
+    if (proxyRes.statusCode === 451 && !targetUrl.includes('81.31.194.120')) {
+      console.warn('[STREAM PROXY] Detectado bloqueo ISP (HTTP 451). Reintentando con IP directa...');
+      return handleStreamProxy(targetUrl.replace(parsedUrl.hostname, '81.31.194.120'), req, res, redirectDepth + 1);
+    }
+
+    // Follow HTTP redirects server-side directly (preserving Range header)
     if ([301, 302, 303, 307, 308].includes(proxyRes.statusCode) && proxyRes.headers.location) {
       const redirectUrl = new URL(proxyRes.headers.location, parsedUrl).href;
       console.log(`[STREAM PROXY] Siguiendo redirección a: ${redirectUrl}`);
@@ -363,7 +389,7 @@ function handleStreamProxy(targetUrl, req, res, redirectDepth = 0) {
       return;
     }
 
-    // Binary Stream (.ts, .mp4, live MPEG-TS)
+    // Binary Stream (.ts, .mp4, .mkv, live MPEG-TS, VOD)
     const responseHeaders = {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Headers': '*',
@@ -381,6 +407,10 @@ function handleStreamProxy(targetUrl, req, res, redirectDepth = 0) {
       responseHeaders['Content-Type'] = proxyRes.headers['content-type'];
     } else if (parsedUrl.pathname.endsWith('.ts')) {
       responseHeaders['Content-Type'] = 'video/mp2t';
+    } else if (parsedUrl.pathname.endsWith('.mp4')) {
+      responseHeaders['Content-Type'] = 'video/mp4';
+    } else if (parsedUrl.pathname.endsWith('.mkv')) {
+      responseHeaders['Content-Type'] = 'video/x-matroska';
     }
 
     if (proxyRes.headers['content-length']) responseHeaders['Content-Length'] = proxyRes.headers['content-length'];
