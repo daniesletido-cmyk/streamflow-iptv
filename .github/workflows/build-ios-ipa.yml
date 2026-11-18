@@ -24,28 +24,29 @@ jobs:
       - name: Install Node Dependencies
         run: npm install
 
-      - name: Copy Assets and Sync Capacitor
+      - name: Diagnostic Sync
         run: |
-          npx cap copy ios
-          npx cap sync ios || echo "Sync finished"
+          OUTPUT=$(npx cap sync ios --verbose 2>&1 || true)
+          echo "Captured output:"
+          echo "$OUTPUT"
+          echo "::notice title=CapacitorSyncOutput::$OUTPUT"
 
       - name: Build & Archive with Xcode (Unsigned for Sideloading)
         run: |
-          xcodebuild archive \
-            -project ios/App/App.xcodeproj \
-            -scheme App \
-            -configuration Release \
-            -destination 'generic/platform=iOS' \
-            -archivePath build/App.xcarchive \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY=""
+          XCODE_OUTPUT=$(xcodebuild archive -project ios/App/App.xcodeproj -scheme App -configuration Release -destination 'generic/platform=iOS' -archivePath build/App.xcarchive CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" 2>&1 || true)
+          echo "$XCODE_OUTPUT"
+          echo "::notice title=XcodeOutput::$XCODE_OUTPUT"
 
       - name: Package Payload into .ipa
         run: |
-          mkdir -p Payload
-          cp -r build/App.xcarchive/Products/Applications/App.app Payload/
-          zip -r StreamFlow-IPTV.ipa Payload
+          if [ -d "build/App.xcarchive/Products/Applications/App.app" ]; then
+            mkdir -p Payload
+            cp -r build/App.xcarchive/Products/Applications/App.app Payload/
+            zip -r StreamFlow-IPTV.ipa Payload
+          else
+            echo "Archive not found"
+            exit 1
+          fi
 
       - name: Upload StreamFlow-IPTV.ipa as Artifact
         uses: actions/upload-artifact@v4
