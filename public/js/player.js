@@ -299,6 +299,7 @@ class StreamPlayer {
   buildPlaybackStrategies(urls, streamType) {
     const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
     const canNative = this.video.canPlayType('application/vnd.apple.mpegurl');
+    const isHttpsPage = typeof window !== 'undefined' && window.location.protocol === 'https:';
     const isVercel = typeof window !== 'undefined' && window.location.hostname.includes('vercel.app');
     const list = [];
 
@@ -307,23 +308,20 @@ class StreamPlayer {
         // iOS Safari / iPad: HLS first on Vercel, TS proxied on LAN
         if (isVercel) {
           if (urls.proxiedHls) list.push({ engine: 'native', url: urls.proxiedHls, label: 'iOS HLS Proxied' });
-          if (urls.hls) list.push({ engine: 'native', url: urls.hls, label: 'iOS HLS Directo' });
           if (urls.proxiedDirectLive) list.push({ engine: 'native', url: urls.proxiedDirectLive, label: 'iOS TS Proxied' });
         } else {
           if (urls.proxiedDirectLive) list.push({ engine: 'native', url: urls.proxiedDirectLive, label: 'iOS TS Proxied' });
           if (urls.proxiedHls) list.push({ engine: 'native', url: urls.proxiedHls, label: 'iOS HLS Proxied' });
           if (urls.proxiedDirect) list.push({ engine: 'native', url: urls.proxiedDirect, label: 'iOS Direct Proxied' });
-          if (urls.directLive) list.push({ engine: 'native', url: urls.directLive, label: 'iOS TS Directo' });
-          if (urls.hls) list.push({ engine: 'native', url: urls.hls, label: 'iOS HLS Directo' });
+          if (!isHttpsPage && urls.directLive) list.push({ engine: 'native', url: urls.directLive, label: 'iOS TS Directo' });
+          if (!isHttpsPage && urls.hls) list.push({ engine: 'native', url: urls.hls, label: 'iOS HLS Directo' });
         }
       } else if (isVercel) {
-        // Vercel Serverless: Prioritize HLS (.m3u8 segments) so serverless proxy never hits infinite-stream timeouts
-        if (window.Hls && Hls.isSupported()) {
-          if (urls.proxiedHls) list.push({ engine: 'hls', url: urls.proxiedHls, label: 'HLS Live (Fluido)' });
-          if (urls.hls) list.push({ engine: 'hls', url: urls.hls, label: 'HLS Directo' });
+        // Vercel Serverless: Prioritize HLS (.m3u8 segments) and skip HTTP direct URLs (blocked by Mixed Content)
+        if (window.Hls && Hls.isSupported() && urls.proxiedHls) {
+          list.push({ engine: 'hls', url: urls.proxiedHls, label: 'HLS Live (Fluido)' });
         }
         if (window.mpegts && mpegts.getFeatureList().mseLivePlayback) {
-          if (urls.directLive) list.push({ engine: 'mpegts', url: urls.directLive, label: 'MPEG-TS Directo' });
           if (urls.proxiedDirectLive) list.push({ engine: 'mpegts', url: urls.proxiedDirectLive, label: 'MPEG-TS Proxied' });
           if (urls.proxiedDirect) list.push({ engine: 'mpegts', url: urls.proxiedDirect, label: 'MPEG-TS Direct Proxied' });
         }
@@ -340,9 +338,9 @@ class StreamPlayer {
         }
         if (window.Hls && Hls.isSupported()) {
           if (urls.proxiedHls) list.push({ engine: 'hls', url: urls.proxiedHls, label: 'HLS Playlist Proxied' });
-          if (urls.hls) list.push({ engine: 'hls', url: urls.hls, label: 'HLS Playlist Directa' });
+          if (!isHttpsPage && urls.hls) list.push({ engine: 'hls', url: urls.hls, label: 'HLS Playlist Directa' });
         }
-        if (window.mpegts && mpegts.getFeatureList().mseLivePlayback && urls.directLive) {
+        if (!isHttpsPage && window.mpegts && mpegts.getFeatureList().mseLivePlayback && urls.directLive) {
           list.push({ engine: 'mpegts', url: urls.directLive, label: 'MPEG-TS Directo sin proxy' });
         }
         if (window.mpegts && mpegts.getFeatureList().mseLivePlayback && urls.proxiedBare) {
@@ -357,7 +355,7 @@ class StreamPlayer {
       if (urls.proxiedDirect) {
         list.push({ engine: 'native', url: urls.proxiedDirect, label: 'VOD Proxied (Range 206)' });
       }
-      if (urls.direct) {
+      if (!isHttpsPage && urls.direct) {
         list.push({ engine: 'native', url: urls.direct, label: 'VOD Directo' });
       }
     }
@@ -381,9 +379,9 @@ class StreamPlayer {
     this.cleanupEngines();
     this.hideVideoUntilClean();
 
-    // Dynamic timeout: 9s for live TV, 20s for VOD
+    // Dynamic timeout: 18s for live TV (allows large FHD segments to buffer cleanly), 25s for VOD
     this.clearConnectionTimeout();
-    const timeoutMs = (this.currentStreamType === 'live') ? 9000 : 20000;
+    const timeoutMs = (this.currentStreamType === 'live') ? 18000 : 25000;
     this.connectTimeout = setTimeout(() => {
       if (!this.isPlaying) {
         console.warn(`[Player] Opción #${index + 1} (${strategy.label}) no comenzó en ${timeoutMs/1000}s. Pasando a la siguiente opción...`);
@@ -445,17 +443,19 @@ class StreamPlayer {
     this.hls = new Hls({
       enableWorker: true,
       lowLatencyMode: false, // Standard HLS buffering prevents 1s micro-stutters on IPTV
+      startFragPrefetch: true, // Prefetch first TS segment immediately on manifest parse
       backBufferLength: 30,
-      maxBufferLength: 30,
-      maxMaxBufferLength: 60,
+      maxBufferLength: 20,
+      maxMaxBufferLength: 45,
       maxBufferHole: 1.5, // Smoothly bridges minor IPTV TS timestamp gaps
+      highBufferWatchdogPeriod: 3,
       nudgeOffset: 0.2,
       nudgeMaxRetry: 5,
-      fragLoadingTimeOut: 15000,
+      fragLoadingTimeOut: 20000,
       fragLoadingMaxRetry: 4,
       manifestLoadingTimeOut: 15000,
       manifestLoadingMaxRetry: 3,
-      liveSyncDurationCount: 3,
+      liveSyncDurationCount: 2, // Start closer to live edge for faster zapping
       liveMaxLatencyDurationCount: 8
     });
 
