@@ -381,9 +381,9 @@ class StreamPlayer {
     this.cleanupEngines();
     this.hideVideoUntilClean();
 
-    // Dynamic timeout: 18s for live TV (allows large FHD segments to buffer cleanly), 25s for VOD
+    // Dynamic timeout: 10s for live TV (fast fail on dead channels), 20s for VOD
     this.clearConnectionTimeout();
-    const timeoutMs = (this.currentStreamType === 'live') ? 18000 : 25000;
+    const timeoutMs = (this.currentStreamType === 'live') ? 10000 : 20000;
     this.connectTimeout = setTimeout(() => {
       if (!this.isPlaying) {
         console.warn(`[Player] Opción #${index + 1} (${strategy.label}) no comenzó en ${timeoutMs/1000}s. Pasando a la siguiente opción...`);
@@ -455,10 +455,10 @@ class StreamPlayer {
       highBufferWatchdogPeriod: 3,
       nudgeOffset: 0.2,
       nudgeMaxRetry: 5,
-      fragLoadingTimeOut: 20000,
-      fragLoadingMaxRetry: 4,
-      manifestLoadingTimeOut: 15000,
-      manifestLoadingMaxRetry: 3,
+      fragLoadingTimeOut: 15000,
+      fragLoadingMaxRetry: 2,
+      manifestLoadingTimeOut: 6000, // Fail fast (6s) on dead channel playlists
+      manifestLoadingMaxRetry: 1,
       liveSyncDurationCount: 2, // Start closer to live edge for faster zapping
       liveMaxLatencyDurationCount: 8
     });

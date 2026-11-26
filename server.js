@@ -494,16 +494,20 @@ function handleStreamProxy(rawTargetUrl, req, res, redirectDepth = 0) {
     agent: agent,
     headers: requestHeaders
   }, (proxyRes) => {
+    // Clear upstream connect timeout once headers arrive
+    proxyReq.setTimeout(0);
     console.log(`[STREAM PROXY] Respuesta IPTV: ${proxyRes.statusCode} (${proxyRes.headers['content-type'] || 'sin content-type'})`);
 
     // Handle ISP block 451: if encountered, attempt IP fallback
     if (proxyRes.statusCode === 451 && !targetUrl.includes('81.31.194.120')) {
+      proxyRes.resume();
       console.warn('[STREAM PROXY] Detectado bloqueo ISP (HTTP 451). Reintentando con IP directa...');
       return handleStreamProxy(targetUrl.replace(parsedUrl.hostname, '81.31.194.120'), req, res, redirectDepth + 1);
     }
 
     // Follow HTTP redirects server-side directly (preserving Range header)
     if ([301, 302, 303, 307, 308].includes(proxyRes.statusCode) && proxyRes.headers.location) {
+      proxyRes.resume();
       const redirectUrl = new URL(proxyRes.headers.location, parsedUrl).href;
       console.log(`[STREAM PROXY] Siguiendo redirección a: ${redirectUrl}`);
       return handleStreamProxy(redirectUrl, req, res, redirectDepth + 1);
@@ -588,10 +592,17 @@ function handleStreamProxy(rawTargetUrl, req, res, redirectDepth = 0) {
     });
   });
 
+  // Fail fast (6s) if upstream IPTV server hangs without sending headers
+  proxyReq.setTimeout(6000, () => {
+    console.warn(`[STREAM PROXY TIMEOUT] Upstream no respondió en 6s: ${targetUrl}`);
+    proxyReq.destroy(new Error('Upstream timeout (6s)'));
+  });
+
   proxyReq.on('error', (err) => {
     console.error(`[STREAM PROXY ERROR] ${err.message}`);
     if (!res.headersSent) {
-      res.status(502).send('Error conectando al stream: ' + err.message);
+      const status = err.message.includes('timeout') ? 504 : 502;
+      res.status(status).send('Error conectando al stream: ' + err.message);
     }
   });
 
