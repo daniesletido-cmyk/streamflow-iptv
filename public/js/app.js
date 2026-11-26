@@ -109,6 +109,45 @@ const App = {
     document.getElementById('closeSidebarBtn')?.addEventListener('click', () => this.toggleMobileSidebar(false));
     document.getElementById('sidebarBackdrop')?.addEventListener('click', () => this.toggleMobileSidebar(false));
 
+    // Single delegated click handler for all stream cards (replaces thousands of per-card listeners)
+    document.getElementById('streamGrid')?.addEventListener('click', (e) => {
+      const card = e.target.closest('.stream-card');
+      if (!card) return;
+      const overallIndex = Number(card.getAttribute('data-stream-index'));
+      const item = this.filteredStreams[overallIndex];
+      if (!item) return;
+
+      const targetId = String(item.stream_id || item.series_id);
+      const isSeries = this.currentTab === 'series' || item.stream_type === 'series' || Boolean(item.series_id);
+
+      if (e.target.closest('.fav-star-btn')) {
+        e.stopPropagation();
+        this.toggleFavorite(item);
+        const starBtn = card.querySelector('.fav-star-btn');
+        const isNowFav = Storage.isFavorite(targetId);
+        if (starBtn) {
+          starBtn.classList.toggle('active', isNowFav);
+          starBtn.querySelector('svg')?.setAttribute('fill', isNowFav ? 'currentColor' : 'none');
+        }
+        return;
+      }
+
+      if (e.target.closest('.watched-toggle-btn')) {
+        e.stopPropagation();
+        const nowWatched = Storage.toggleWatched(targetId, {
+          stream_type: isSeries ? 'series' : 'movie',
+          name: item.name || item.title,
+          cover: item.cover || item.stream_icon
+        });
+        this.refreshWatchedBadges();
+        this.renderContinueWatching();
+        this.showToast(nowWatched ? `✓ Marcado como visto: ${item.name}` : `Marcado como pendiente: ${item.name}`);
+        return;
+      }
+
+      this.onStreamSelected(overallIndex);
+    });
+
     // Multi-Account Form Actions
     document.getElementById('loginForm')?.addEventListener('submit', (e) => this.handleLoginSubmit(e));
     document.getElementById('demoModeBtn')?.addEventListener('click', () => this.startDemoMode());
@@ -749,7 +788,7 @@ const App = {
           }
 
           ${isWatched ? `
-            <div class="watched-indicator absolute top-2 left-2 z-10 flex items-center gap-1 px-2 py-0.5 rounded bg-[#090b0f]/85 border border-emerald-500/40 text-emerald-400 text-[10px] font-semibold backdrop-blur-md pointer-events-none">
+            <div class="watched-indicator absolute top-2 left-2 z-10 flex items-center gap-1 px-2 py-0.5 rounded bg-[#090b0f]/90 border border-emerald-500/40 text-emerald-400 text-[10px] font-semibold pointer-events-none">
               <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg>
               <span>${isSeries ? 'Finalizada' : 'Vista'}</span>
             </div>
@@ -774,7 +813,7 @@ const App = {
           </button>
 
           ${(isVod || isSeries) ? `
-            <button class="watched-toggle-btn ${isWatched ? 'active text-emerald-400 border-emerald-500/40' : 'text-[#9aa4b2] border-white/[0.08]'} absolute bottom-2 right-2 z-20 min-w-[36px] min-h-[36px] flex items-center justify-center rounded-full bg-[#090b0f]/75 hover:bg-[#090b0f]/95 hover:text-emerald-400 border backdrop-blur-md transition-colors" data-watched-id="${targetId}" title="${isWatched ? 'Marcar como no visto' : 'Marcar como visto'}">
+            <button class="watched-toggle-btn ${isWatched ? 'active text-emerald-400 border-emerald-500/40' : 'text-[#9aa4b2] border-white/[0.08]'} absolute bottom-2 right-2 z-20 min-w-[36px] min-h-[36px] flex items-center justify-center rounded-full bg-[#090b0f]/90 hover:text-emerald-400 border transition-colors" data-watched-id="${targetId}" title="${isWatched ? 'Marcar como no visto' : 'Marcar como visto'}">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M5 13l4 4L19 7"/></svg>
             </button>
           ` : ''}
@@ -784,34 +823,6 @@ const App = {
           <span class="stream-sub">${isSeries ? 'Serie' : isVod ? 'Película' : 'En vivo'}</span>
         </div>
       `;
-
-      // Event delegation on card
-      card.addEventListener('click', (e) => {
-        if (e.target.closest('.fav-star-btn')) {
-          e.stopPropagation();
-          this.toggleFavorite(item);
-          const starBtn = card.querySelector('.fav-star-btn');
-          const isNowFav = Storage.isFavorite(targetId);
-          starBtn.classList.toggle('active', isNowFav);
-          starBtn.querySelector('svg').setAttribute('fill', isNowFav ? 'currentColor' : 'none');
-          return;
-        }
-
-        if (e.target.closest('.watched-toggle-btn')) {
-          e.stopPropagation();
-          const nowWatched = Storage.toggleWatched(targetId, {
-            stream_type: isSeries ? 'series' : 'movie',
-            name: item.name || item.title,
-            cover: item.cover || item.stream_icon
-          });
-          this.refreshWatchedBadges();
-          this.renderContinueWatching();
-          this.showToast(nowWatched ? `✓ Marcado como visto: ${item.name}` : `Marcado como pendiente: ${item.name}`);
-          return;
-        }
-
-        this.onStreamSelected(overallIndex);
-      });
 
       fragment.appendChild(card);
     });

@@ -106,14 +106,16 @@ class StreamPlayer {
         this.markVideoReady();
       }
 
-      this.updateVodTimeline();
+      // Skip VOD timeline & progress writes during Live TV to keep main thread ultra-light
+      if (this.currentStreamType !== 'live') {
+        this.updateVodTimeline();
 
-      // Track continue watching for Movies & Series
-      if (this.currentStreamType !== 'live' && this.video.duration > 0 && this.currentItem) {
-        const now = Date.now();
-        if (now - this.lastProgressSave > 3000) {
-          this.lastProgressSave = now;
-          Storage.savePlaybackProgress(this.currentItem, this.video.currentTime, this.video.duration, this.seriesContext);
+        if (this.video.duration > 0 && this.currentItem) {
+          const now = Date.now();
+          if (now - this.lastProgressSave > 3000) {
+            this.lastProgressSave = now;
+            Storage.savePlaybackProgress(this.currentItem, this.video.currentTime, this.video.duration, this.seriesContext);
+          }
         }
       }
     });
@@ -404,6 +406,7 @@ class StreamPlayer {
   }
 
   loadWithMpegTs(url) {
+    const isLocal = typeof window !== 'undefined' && !window.location.hostname.includes('vercel.app');
     this.mpegtsPlayer = mpegts.createPlayer({
       type: 'mse',
       isLive: true,
@@ -415,10 +418,10 @@ class StreamPlayer {
       liveBufferLatencyMaxLatency: 8.0,
       liveBufferLatencyMinRemain: 2.5,
       enableStashBuffer: true,
-      stashInitialSize: 256 * 1024, // 256KB for stable keyframe lock without stutter
+      stashInitialSize: isLocal ? 128 * 1024 : 256 * 1024, // 128KB instant zapping on local/.exe
       autoCleanupSourceBuffer: true,
-      autoCleanupMaxBackwardDuration: 45,
-      autoCleanupMinBackwardDuration: 20,
+      autoCleanupMaxBackwardDuration: 20, // Low RAM footprint during long sessions
+      autoCleanupMinBackwardDuration: 10,
       fixAudioTimestampGap: true,
       accurateSeek: false
     });
@@ -439,14 +442,15 @@ class StreamPlayer {
   }
 
   loadWithHls(url) {
+    const isVercel = typeof window !== 'undefined' && window.location.hostname.includes('vercel.app');
     this.hlsRecoverAttempts = 0;
     this.hls = new Hls({
       enableWorker: true,
       lowLatencyMode: false, // Standard HLS buffering prevents 1s micro-stutters on IPTV
       startFragPrefetch: true, // Prefetch first TS segment immediately on manifest parse
-      backBufferLength: 30,
-      maxBufferLength: 20,
-      maxMaxBufferLength: 45,
+      backBufferLength: 10, // Keeps RAM usage 3x lower
+      maxBufferLength: isVercel ? 20 : 15,
+      maxMaxBufferLength: isVercel ? 45 : 30,
       maxBufferHole: 1.5, // Smoothly bridges minor IPTV TS timestamp gaps
       highBufferWatchdogPeriod: 3,
       nudgeOffset: 0.2,

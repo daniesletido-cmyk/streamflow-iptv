@@ -25,12 +25,10 @@ namespace StreamFlowLauncher
 
                 if (!isLocalRunning)
                 {
-                    // Attempt to launch local node server silently
                     serverProcess = StartLocalNodeServer();
-                    // Wait up to 4 seconds for server to start responding
                     for (int i = 0; i < 16; i++)
                     {
-                        Thread.Sleep(250);
+                        Thread.Sleep(200);
                         if (IsPortActive(Port))
                         {
                             isLocalRunning = true;
@@ -40,13 +38,10 @@ namespace StreamFlowLauncher
                 }
 
                 string targetUrl = isLocalRunning ? LocalUrl : CloudUrl;
-
-                // Launch in Standalone Chromium App Mode
                 Process browserProcess = LaunchAppWindow(targetUrl);
 
                 if (browserProcess != null)
                 {
-                    // Wait for user to close the app window
                     browserProcess.WaitForExit();
                 }
             }
@@ -61,7 +56,6 @@ namespace StreamFlowLauncher
             }
             finally
             {
-                // Cleanly kill server if we spawned it
                 if (serverProcess != null && !serverProcess.HasExited)
                 {
                     try { serverProcess.Kill(); } catch { }
@@ -74,7 +68,7 @@ namespace StreamFlowLauncher
             try
             {
                 HttpWebRequest request = (HttpWebRequest)WebRequest.Create("http://localhost:" + port + "/api/info");
-                request.Timeout = 1000;
+                request.Timeout = 800;
                 request.Method = "GET";
                 using (HttpWebResponse response = (HttpWebResponse)request.GetResponse())
                 {
@@ -96,12 +90,15 @@ namespace StreamFlowLauncher
 
                 if (!File.Exists(serverJs))
                 {
-                    // Check parent dir if executable is inside bin/desktop
-                    string parentServerJs = Path.Combine(Directory.GetParent(baseDir).FullName, "server.js");
-                    if (File.Exists(parentServerJs))
+                    DirectoryInfo parent = Directory.GetParent(baseDir);
+                    if (parent != null)
                     {
-                        serverJs = parentServerJs;
-                        baseDir = Directory.GetParent(baseDir).FullName;
+                        string parentServerJs = Path.Combine(parent.FullName, "server.js");
+                        if (File.Exists(parentServerJs))
+                        {
+                            serverJs = parentServerJs;
+                            baseDir = parent.FullName;
+                        }
                     }
                 }
 
@@ -138,7 +135,28 @@ namespace StreamFlowLauncher
                 Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), @"BraveSoftware\Brave-Browser\Application\brave.exe")
             };
 
-            string appArgs = "--app=\"" + url + "\" --start-maximized --window-size=1366,768 --disable-features=Translate";
+            string profileDir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "StreamFlowIPTV",
+                "Profile"
+            );
+
+            try { Directory.CreateDirectory(profileDir); } catch { }
+
+            string appArgs = "--app=\"" + url + "\" " +
+                             "--user-data-dir=\"" + profileDir + "\" " +
+                             "--start-maximized " +
+                             "--window-size=1366,768 " +
+                             "--autoplay-policy=no-user-gesture-required " +
+                             "--enable-gpu-rasterization " +
+                             "--enable-zero-copy " +
+                             "--ignore-gpu-blocklist " +
+                             "--disable-background-networking " +
+                             "--disable-default-apps " +
+                             "--disable-extensions " +
+                             "--disable-sync " +
+                             "--no-first-run " +
+                             "--disable-features=Translate";
 
             foreach (string exe in possibleExecutables)
             {
@@ -154,7 +172,6 @@ namespace StreamFlowLauncher
                 }
             }
 
-            // Fallback to default system browser
             return Process.Start(new ProcessStartInfo
             {
                 FileName = url,

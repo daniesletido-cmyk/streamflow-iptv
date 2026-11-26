@@ -277,6 +277,13 @@ button, a, input, select {
   box-shadow: 0 8px 20px -8px rgba(0, 0, 0, 0.65);
 }
 
+/* Stream Card Optimization: skip layout/paint for off-screen cards */
+.stream-card {
+  content-visibility: auto;
+  contain-intrinsic-size: 220px;
+  contain: layout style paint;
+}
+
 /* Vertical Cinema Posters for Movies & Series */
 .grid-vertical .stream-poster-wrap {
   aspect-ratio: 2 / 3 !important;
@@ -362,10 +369,9 @@ button, a, input, select {
   align-items: center;
   justify-content: center;
   border-radius: 9999px;
-  background-color: rgba(9, 11, 15, 0.72);
+  background-color: rgba(9, 11, 15, 0.85);
   border: 1px solid rgba(255, 255, 255, 0.08);
   color: var(--text-secondary);
-  backdrop-filter: blur(8px);
   transition: color 0.15s ease, background-color 0.15s ease, transform 0.15s ease;
   z-index: 5;
 }

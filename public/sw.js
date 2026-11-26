@@ -1,4 +1,4 @@
-const CACHE_NAME = 'streamflow-cache-v11';
+const CACHE_NAME = 'streamflow-cache-v12';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',

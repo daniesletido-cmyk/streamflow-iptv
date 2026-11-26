@@ -4,6 +4,7 @@ const http = require('http');
 const https = require('https');
 const os = require('os');
 const path = require('path');
+const zlib = require('zlib');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -12,20 +13,20 @@ const PORT = process.env.PORT || 3000;
 const httpAgent = new http.Agent({
   keepAlive: true,
   keepAliveMsecs: 30000,
-  maxSockets: 150,
-  maxFreeSockets: 40,
+  maxSockets: 100,
+  maxFreeSockets: 25,
   timeout: 15000
 });
 
 const httpsAgent = new https.Agent({
   keepAlive: true,
   keepAliveMsecs: 30000,
-  maxSockets: 150,
-  maxFreeSockets: 40,
+  maxSockets: 100,
+  maxFreeSockets: 25,
   timeout: 15000
 });
 
-// In-Memory cache for categories & stream lists
+// In-Memory cache for categories & stream lists (bounded for low RAM)
 const apiCache = new Map();
 const CACHE_TTL_MS = 10 * 60 * 1000;
 
@@ -34,15 +35,35 @@ function getCached(key) {
   if (item && (Date.now() - item.timestamp < CACHE_TTL_MS)) {
     return item.data;
   }
+  if (item) apiCache.delete(key);
   return null;
 }
 
 function setCache(key, data) {
-  if (apiCache.size > 40) {
+  if (apiCache.size >= 25) {
     const firstKey = apiCache.keys().next().value;
     if (firstKey) apiCache.delete(firstKey);
   }
   apiCache.set(key, { timestamp: Date.now(), data });
+}
+
+// Lightweight GZIP compression helper for large JSON responses (cuts 10MB IPTV lists by ~85%)
+function sendJsonCompressed(req, res, payload) {
+  const jsonStr = JSON.stringify(payload);
+  const acceptEncoding = req.headers['accept-encoding'] || '';
+  if (jsonStr.length > 2048 && acceptEncoding.includes('gzip')) {
+    zlib.gzip(jsonStr, { level: 4 }, (err, compressed) => {
+      if (err) {
+        return res.json(payload);
+      }
+      res.setHeader('Content-Encoding', 'gzip');
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.setHeader('Vary', 'Accept-Encoding');
+      return res.send(compressed);
+    });
+  } else {
+    return res.json(payload);
+  }
 }
 
 app.use(cors());
@@ -315,7 +336,7 @@ app.post('/api/categories', async (req, res) => {
     const cacheKey = `cat_${base}_${username}_${action}`;
     const cached = getCached(cacheKey);
     if (cached) {
-      return res.json({ success: true, categories: cached, fromCache: true });
+      return sendJsonCompressed(req, res, { success: true, categories: cached, fromCache: true });
     }
 
     const targetUrl = `${base}/player_api.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&action=${action}`;
@@ -329,7 +350,7 @@ app.post('/api/categories', async (req, res) => {
     const categories = Array.isArray(data) ? data : [];
     setCache(cacheKey, categories);
 
-    return res.json({ success: true, categories });
+    return sendJsonCompressed(req, res, { success: true, categories });
   } catch (err) {
     return res.status(500).json({ success: false, error: err.message, categories: [] });
   }
@@ -348,7 +369,7 @@ app.post('/api/streams', async (req, res) => {
     const cacheKey = `str_${base}_${username}_${action}_${categoryId || 'all'}`;
     const cached = getCached(cacheKey);
     if (cached) {
-      return res.json({ success: true, streams: cached, fromCache: true });
+      return sendJsonCompressed(req, res, { success: true, streams: cached, fromCache: true });
     }
 
     let targetUrl = `${base}/player_api.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&action=${action}`;
@@ -365,7 +386,7 @@ app.post('/api/streams', async (req, res) => {
     const streams = Array.isArray(data) ? data : [];
     setCache(cacheKey, streams);
 
-    return res.json({ success: true, streams });
+    return sendJsonCompressed(req, res, { success: true, streams });
   } catch (err) {
     return res.status(500).json({ success: false, error: err.message, streams: [] });
   }
