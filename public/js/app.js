@@ -30,6 +30,8 @@ const App = {
     this.initIosBanner();
     this.loadServerInfo();
 
+    // Sync multi-accounts with server
+    await Storage.syncWithServer();
     this.activeProfile = Storage.getActiveProfile();
     if (!this.activeProfile) {
       try {
@@ -107,9 +109,44 @@ const App = {
     document.getElementById('closeSidebarBtn')?.addEventListener('click', () => this.toggleMobileSidebar(false));
     document.getElementById('sidebarBackdrop')?.addEventListener('click', () => this.toggleMobileSidebar(false));
 
-    // Login Form Submit
+    // Multi-Account Form Actions
     document.getElementById('loginForm')?.addEventListener('submit', (e) => this.handleLoginSubmit(e));
     document.getElementById('demoModeBtn')?.addEventListener('click', () => this.startDemoMode());
+    document.getElementById('showAddAccountBtn')?.addEventListener('click', () => this.showProfileForm(null));
+    document.getElementById('backToProfilesBtn')?.addEventListener('click', () => this.showProfilesList());
+
+    // M3U URL auto-extractor
+    const applyM3u = () => {
+      const raw = document.getElementById('m3uPasteInput')?.value || '';
+      const parsed = Storage.parseM3uUrl(raw);
+      if (parsed) {
+        if (document.getElementById('loginServer')) document.getElementById('loginServer').value = parsed.serverUrl;
+        if (document.getElementById('loginUser')) document.getElementById('loginUser').value = parsed.username;
+        if (document.getElementById('loginPass')) document.getElementById('loginPass').value = parsed.password;
+        this.showToast('✓ Datos M3U extraídos con éxito');
+      } else {
+        this.showToast('Enlace M3U no reconocido. Introduce los datos manualmente.');
+      }
+    };
+    document.getElementById('applyM3uBtn')?.addEventListener('click', applyM3u);
+    document.getElementById('m3uPasteInput')?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        applyM3u();
+      }
+    });
+
+    // Auto-detect when user pastes full M3U URL directly into loginServer field
+    document.getElementById('loginServer')?.addEventListener('input', (e) => {
+      const val = e.target.value.trim();
+      const parsed = Storage.parseM3uUrl(val);
+      if (parsed) {
+        e.target.value = parsed.serverUrl;
+        if (document.getElementById('loginUser')) document.getElementById('loginUser').value = parsed.username;
+        if (document.getElementById('loginPass')) document.getElementById('loginPass').value = parsed.password;
+        this.showToast('✓ Enlace M3U detectado y rellenado');
+      }
+    });
 
     // Player action buttons
     document.getElementById('playPauseBtn')?.addEventListener('click', () => this.player.togglePlayPause());
@@ -1144,28 +1181,75 @@ const App = {
     }
   },
 
-  // Xtream Codes Login & Profile Modal
-  openLoginModal(firstTime = false) {
+  // Xtream Codes Multi-Account Manager Modal
+  async openLoginModal(firstTime = false) {
     const modal = document.getElementById('loginModal');
     if (!modal) return;
 
-    // Prefill fields if a profile is already known
-    const current = this.activeProfile || Storage.getActiveProfile();
-    if (current) {
-      const nameInput = document.getElementById('loginName');
-      const serverInput = document.getElementById('loginServer');
-      const userInput = document.getElementById('loginUser');
-      const passInput = document.getElementById('loginPass');
-      if (nameInput && !nameInput.value) nameInput.value = current.name || '';
-      if (serverInput && !serverInput.value) serverInput.value = current.serverUrl || '';
-      if (userInput && !userInput.value) userInput.value = current.username || '';
-      if (passInput && !passInput.value) passInput.value = current.password || '';
-    }
+    // Sync saved accounts from server so all devices share the accounts
+    await Storage.syncWithServer();
+    const profiles = Storage.getProfiles();
 
     modal.classList.remove('hidden');
+
+    if (firstTime || profiles.length === 0) {
+      this.showProfileForm(null);
+    } else {
+      this.showProfilesList();
+    }
+  },
+
+  showProfilesList() {
+    const listView = document.getElementById('profilesListView');
+    const formView = document.getElementById('profileFormView');
+    const title = document.getElementById('modalTitle');
+    const sub = document.getElementById('modalSubtitle');
+    if (listView) listView.classList.remove('hidden');
+    if (formView) formView.classList.add('hidden');
+    if (title) title.textContent = 'Gestor de Cuentas IPTV';
+    if (sub) sub.textContent = 'Cambia de cuenta al instante o añade una nueva';
     this.renderProfilesList();
+  },
+
+  showProfileForm(profileToEdit = null) {
+    const listView = document.getElementById('profilesListView');
+    const formView = document.getElementById('profileFormView');
+    const title = document.getElementById('modalTitle');
+    const sub = document.getElementById('modalSubtitle');
     const errBox = document.getElementById('loginError');
+    const editIdInput = document.getElementById('editProfileId');
+    const formModeLabel = document.getElementById('formModeLabel');
+
+    if (listView) listView.classList.add('hidden');
+    if (formView) formView.classList.remove('hidden');
     if (errBox) errBox.classList.add('hidden');
+
+    const nameInput = document.getElementById('loginName');
+    const serverInput = document.getElementById('loginServer');
+    const userInput = document.getElementById('loginUser');
+    const passInput = document.getElementById('loginPass');
+    const m3uInput = document.getElementById('m3uPasteInput');
+    if (m3uInput) m3uInput.value = '';
+
+    if (profileToEdit) {
+      if (title) title.textContent = 'Editar Cuenta IPTV';
+      if (sub) sub.textContent = 'Modifica los datos del servidor o credenciales';
+      if (formModeLabel) formModeLabel.textContent = 'Editando: ' + (profileToEdit.name || profileToEdit.username);
+      if (editIdInput) editIdInput.value = profileToEdit.id;
+      if (nameInput) nameInput.value = profileToEdit.name || '';
+      if (serverInput) serverInput.value = profileToEdit.serverUrl || '';
+      if (userInput) userInput.value = profileToEdit.username || '';
+      if (passInput) passInput.value = profileToEdit.password || '';
+    } else {
+      if (title) title.textContent = 'Conectar Nueva Cuenta IPTV';
+      if (sub) sub.textContent = 'Introduce los datos de tu proveedor o pega un enlace M3U';
+      if (formModeLabel) formModeLabel.textContent = 'Nueva Cuenta';
+      if (editIdInput) editIdInput.value = '';
+      if (nameInput) nameInput.value = '';
+      if (serverInput) serverInput.value = '';
+      if (userInput) userInput.value = '';
+      if (passInput) passInput.value = '';
+    }
   },
 
   renderProfilesList() {
@@ -1174,32 +1258,90 @@ const App = {
 
     const profiles = Storage.getProfiles();
     if (!profiles.length) {
-      list.innerHTML = `<p class="text-xs text-gray-500">No hay cuentas guardadas aún.</p>`;
+      list.innerHTML = `
+        <div class="text-center py-6 px-4 bg-[#161a22] rounded-xl border border-white/[0.06] space-y-2">
+          <p class="text-sm font-semibold text-slate-300">No tienes cuentas configuradas</p>
+          <p class="text-xs text-slate-500">Haz clic en «Añadir Otra Cuenta» para conectar tu lista Xtream.</p>
+        </div>
+      `;
       return;
     }
 
     let html = '';
     profiles.forEach(p => {
       const isActive = this.activeProfile?.id === p.id;
+      const cleanServer = (p.serverUrl || '').replace(/^https?:\/\//i, '');
+      let expText = '';
+      if (p.userInfo && p.userInfo.exp_date) {
+        try {
+          const expDate = new Date(Number(p.userInfo.exp_date) * 1000);
+          expText = ' • Vence: ' + expDate.toLocaleDateString();
+        } catch (e) {}
+      }
+
       html += `
-        <div class="flex items-center justify-between min-h-[48px] p-2.5 rounded-lg bg-[#161a22] border ${isActive ? 'border-sky-500/40' : 'border-white/[0.08]'} mb-2">
-          <div class="cursor-pointer flex-1 min-w-0 pr-2" onclick="App.selectProfile('${p.id}')">
-            <span class="font-semibold text-sm block truncate ${isActive ? 'text-sky-400' : 'text-[#f4f6f9]'}">${p.name || p.username}</span>
-            <span class="block text-xs text-[#647082] truncate">${p.serverUrl}</span>
+        <div class="p-3.5 rounded-xl bg-[#161a22] border ${isActive ? 'border-sky-500 ring-1 ring-sky-500/40' : 'border-white/[0.08] hover:border-white/[0.16]'} transition-all space-y-2.5">
+          <div class="flex items-start justify-between gap-2">
+            <div class="flex items-center gap-2 min-w-0">
+              <span class="w-2.5 h-2.5 rounded-full ${isActive ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'} shrink-0"></span>
+              <div class="min-w-0">
+                <div class="flex items-center gap-2">
+                  <h4 class="font-bold text-sm truncate ${isActive ? 'text-sky-300' : 'text-white'}">${p.name || p.username}</h4>
+                  ${isActive ? '<span class="text-[10px] font-bold px-1.5 py-0.2 rounded bg-sky-500/20 text-sky-400 uppercase tracking-wider">En Uso</span>' : ''}
+                </div>
+                <p class="text-xs text-slate-400 font-mono truncate">${cleanServer} • <span class="text-slate-300">${p.username}</span>${expText}</p>
+              </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="flex items-center gap-1.5 shrink-0">
+              <button title="Editar cuenta" class="p-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] text-slate-400 hover:text-white transition-colors" onclick="App.editProfile('${p.id}')">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125"/></svg>
+              </button>
+              <button title="Eliminar cuenta" class="p-1.5 rounded-lg bg-white/[0.06] hover:bg-red-500/20 text-slate-400 hover:text-red-400 transition-colors" onclick="App.deleteProfile('${p.id}')">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/></svg>
+              </button>
+            </div>
           </div>
-          <button class="min-h-[34px] px-2.5 text-red-400 hover:text-red-300 hover:bg-red-950/30 rounded text-xs font-medium transition-colors" onclick="App.deleteProfile('${p.id}')">Borrar</button>
+
+          <div class="pt-1">
+            ${isActive 
+              ? '<div class="text-center py-1.5 text-xs text-sky-400 font-semibold bg-sky-500/10 rounded-lg border border-sky-500/20">✓ Cuenta activa actual</div>'
+              : `<button class="w-full py-2 px-3 rounded-lg text-xs font-semibold bg-white/[0.08] hover:bg-sky-500 hover:text-black text-white transition-all flex items-center justify-center gap-1.5" onclick="App.selectProfile('${p.id}')">
+                  <span>Conectar y Usar esta Cuenta</span>
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"/></svg>
+                </button>`
+            }
+          </div>
         </div>
       `;
     });
     list.innerHTML = html;
   },
 
+  editProfile(id) {
+    const profiles = Storage.getProfiles();
+    const p = profiles.find(item => item.id === id);
+    if (p) {
+      this.showProfileForm(p);
+    }
+  },
+
   async handleLoginSubmit(e) {
     e.preventDefault();
-    const serverUrl = document.getElementById('loginServer').value.trim();
-    const username = document.getElementById('loginUser').value.trim();
-    const password = document.getElementById('loginPass').value.trim();
+    const editId = document.getElementById('editProfileId')?.value || '';
+    let serverUrl = document.getElementById('loginServer').value.trim();
+    let username = document.getElementById('loginUser').value.trim();
+    let password = document.getElementById('loginPass').value.trim();
     const profileName = document.getElementById('loginName').value.trim() || username;
+
+    // Check if server field actually contained an M3U link and parse it
+    const m3uParsed = Storage.parseM3uUrl(serverUrl);
+    if (m3uParsed) {
+      serverUrl = m3uParsed.serverUrl;
+      username = username || m3uParsed.username;
+      password = password || m3uParsed.password;
+    }
 
     const errBox = document.getElementById('loginError');
     const submitBtn = document.getElementById('loginSubmitBtn');
@@ -1213,9 +1355,12 @@ const App = {
         throw new Error(res.error || 'No se pudo conectar.');
       }
 
+      const verifiedServerUrl = res.serverUrl || Api.cleanUrl(serverUrl);
+
       const profile = {
+        id: editId || ('prof_' + username.toLowerCase().replace(/[^a-z0-9]/g, '') + '_' + Date.now().toString().slice(-4)),
         name: profileName,
-        serverUrl,
+        serverUrl: verifiedServerUrl,
         username,
         password,
         isDemo: false,
@@ -1227,16 +1372,10 @@ const App = {
       Storage.setActiveProfileId(saved.id);
       this.activeProfile = saved;
 
-      // Persist to server for zero-relogin experience on all devices
-      fetch('/api/saved-profile', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ profile: saved })
-      }).catch(() => {});
-
       this.updateProfileUi();
       this.closeModals();
-      await this.loadCurrentTab();
+      this.showToast(`✓ Cuenta conectada: ${saved.name}`);
+      await this.loadCurrentTab(true);
     } catch (err) {
       if (errBox) {
         errBox.textContent = err.message;
@@ -1244,14 +1383,14 @@ const App = {
       }
     } finally {
       submitBtn.disabled = false;
-      submitBtn.textContent = 'Conectar Lista Xtream';
+      submitBtn.textContent = 'Guardar y Conectar Cuenta';
     }
   },
 
   startDemoMode() {
     const demoProfile = {
       id: 'demo_profile',
-      name: 'Modo Demo (Pruebas)',
+      name: 'Modo Demo (Gratuito)',
       serverUrl: 'https://demo-iptv.local',
       username: 'demo',
       password: 'demo',
@@ -1263,10 +1402,11 @@ const App = {
 
     this.updateProfileUi();
     this.closeModals();
-    this.loadCurrentTab();
+    this.showToast('✓ Modo Demo activado');
+    this.loadCurrentTab(true);
   },
 
-  selectProfile(id) {
+  async selectProfile(id) {
     const profiles = Storage.getProfiles();
     const found = profiles.find(p => p.id === id);
     if (found) {
@@ -1274,18 +1414,25 @@ const App = {
       this.activeProfile = found;
       this.updateProfileUi();
       this.closeModals();
-      this.loadCurrentTab();
+      this.showToast(`✓ Cambiado a: ${found.name || found.username}`);
+      await this.loadCurrentTab(true);
     }
   },
 
   deleteProfile(id) {
+    const profiles = Storage.getProfiles();
+    const p = profiles.find(item => item.id === id);
+    const confirmName = p ? (p.name || p.username) : 'esta cuenta';
+    if (!confirm(`¿Eliminar la cuenta "${confirmName}"?`)) return;
+
     Storage.deleteProfile(id);
     this.renderProfilesList();
     if (this.activeProfile?.id === id) {
       this.activeProfile = Storage.getActiveProfile();
       this.updateProfileUi();
-      this.loadCurrentTab();
+      this.loadCurrentTab(true);
     }
+    this.showToast('Cuenta eliminada');
   },
 
   updateProfileUi() {

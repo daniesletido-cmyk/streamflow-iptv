@@ -43,16 +43,45 @@ const Storage = {
   normalizeProfile(profile) {
     if (!profile) return profile;
     const p = { ...profile };
-    if (p.serverUrl && p.serverUrl.includes('westream.sbs')) {
-      p.serverUrl = p.serverUrl.replace('westream.sbs', '81.31.194.120');
+    if (p.serverUrl) {
+      if (p.serverUrl.includes('westream.sbs')) {
+        p.serverUrl = p.serverUrl.replace('westream.sbs', '81.31.194.120');
+      }
+      p.serverUrl = p.serverUrl.replace(/\/(player_api|panel_api|get)\.php.*$/i, '');
+      p.serverUrl = p.serverUrl.replace(/\/(c|stalker_portal|live|movie|series)\/?$/i, '');
+      p.serverUrl = p.serverUrl.replace(/\/+$/, '');
     }
+    p.id = p.id || 'prof_' + (p.username ? p.username.toLowerCase() : Date.now());
     return p;
+  },
+
+  // Parses an M3U or full Xtream URL if pasted by the user
+  parseM3uUrl(raw) {
+    if (!raw) return null;
+    const str = raw.trim();
+    if (!str.includes('?')) return null;
+    try {
+      const qIndex = str.indexOf('?');
+      const base = str.substring(0, qIndex).replace(/\/(get|player_api)\.php$/i, '');
+      const search = str.substring(qIndex + 1);
+      const params = new URLSearchParams(search);
+      const username = params.get('username') || params.get('user');
+      const password = params.get('password') || params.get('pass');
+      if (username && password) {
+        return {
+          serverUrl: base,
+          username,
+          password
+        };
+      }
+    } catch (e) {}
+    return null;
   },
 
   saveProfile(profile) {
     const normalized = this.normalizeProfile(profile);
     const profiles = this.getProfiles();
-    const existingIndex = profiles.findIndex(p => p.id === normalized.id);
+    const existingIndex = profiles.findIndex(p => p.id === normalized.id || (p.username === normalized.username && p.serverUrl === normalized.serverUrl));
     if (existingIndex >= 0) {
       profiles[existingIndex] = { ...profiles[existingIndex], ...normalized };
     } else {
@@ -61,6 +90,7 @@ const Storage = {
     }
     localStorage.setItem(this.KEYS.PROFILES, JSON.stringify(profiles));
     this.setCookieProfile(normalized);
+    this.syncProfilesToServer(profiles, normalized.id);
     return normalized;
   },
 
@@ -70,7 +100,42 @@ const Storage = {
     if (this.getActiveProfileId() === id) {
       localStorage.removeItem(this.KEYS.ACTIVE_PROFILE_ID);
       document.cookie = 'streamflow_active_profile=; path=/; max-age=0;';
+      if (profiles.length > 0) {
+        this.setActiveProfileId(profiles[0].id);
+      }
     }
+    this.syncProfilesToServer(profiles, this.getActiveProfileId());
+  },
+
+  async syncProfilesToServer(profiles, activeId) {
+    try {
+      await fetch('/api/saved-profiles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ profiles, activeId })
+      });
+    } catch (e) {}
+  },
+
+  async syncWithServer() {
+    try {
+      const res = await fetch('/api/saved-profiles');
+      const data = await res.json();
+      if (data && data.success && Array.isArray(data.profiles) && data.profiles.length > 0) {
+        const local = this.getProfiles();
+        const merged = [...local];
+        data.profiles.forEach(sp => {
+          const norm = this.normalizeProfile(sp);
+          const exists = merged.some(lp => lp.id === norm.id || (lp.username === norm.username && lp.serverUrl === norm.serverUrl));
+          if (!exists) {
+            merged.push(norm);
+          }
+        });
+        localStorage.setItem(this.KEYS.PROFILES, JSON.stringify(merged));
+        return merged;
+      }
+    } catch (e) {}
+    return this.getProfiles();
   },
 
   getActiveProfile() {
@@ -96,6 +161,12 @@ const Storage = {
 
   setActiveProfileId(id) {
     localStorage.setItem(this.KEYS.ACTIVE_PROFILE_ID, id);
+    const profiles = this.getProfiles();
+    const active = profiles.find(p => p.id === id);
+    if (active) {
+      this.setCookieProfile(active);
+      this.syncProfilesToServer(profiles, id);
+    }
   },
 
   getActiveProfileId() {

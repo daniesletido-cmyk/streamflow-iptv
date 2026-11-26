@@ -2,9 +2,12 @@
   "name": "streamflow-iptv",
   "version": "1.0.0",
   "description": "Custom modern IPTV Player for PC, iPad and iPhone with Xtream Codes API",
-  "main": "server.js",
+  "main": "electron/main.js",
   "scripts": {
     "start": "node server.js",
+    "app": "electron .",
+    "desktop": "electron .",
+    "dist:win": "electron-packager . StreamFlow-IPTV --platform=win32 --arch=x64 --out=dist --overwrite --ignore=\"^/(dist|ios|build)\"",
     "build": "cap sync ios",
     "cap:sync": "cap sync ios",
     "cap:open": "cap open ios"
@@ -29,5 +32,9 @@
     "cors": "^2.8.5",
     "express": "^4.21.2",
     "typescript": "^7.0.2"
+  },
+  "devDependencies": {
+    "electron": "^45.5.0",
+    "electron-packager": "^17.1.2"
   }
 }

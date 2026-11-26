@@ -395,62 +395,94 @@
 
   <!-- ================= MODALS (Bottom Sheets on Mobile, Centered on Desktop) ================= -->
 
-  <!-- 1. LOGIN / XTREAM PROFILES MODAL -->
+  <!-- 1. MULTI-ACCOUNT / XTREAM PROFILES MODAL -->
   <div id="loginModal" class="modal-overlay fixed inset-0 z-40 bg-black/75 backdrop-blur-sm hidden flex items-center justify-center p-4">
     <div class="modal-panel rounded-2xl w-full max-w-lg overflow-hidden flex flex-col">
       <!-- Mobile Bottom Sheet Grabber -->
       <div class="md:hidden flex justify-center pt-3 pb-1"><div class="w-10 h-1 rounded-full bg-white/20"></div></div>
       
+      <!-- Modal Header -->
       <div class="px-6 py-4 sm:py-5 border-b border-white/[0.08] flex items-center justify-between">
         <div>
-          <h3 class="text-base sm:text-lg font-semibold text-[#f4f6f9]">Configurar Lista Xtream</h3>
-          <p class="text-xs text-[#9aa4b2]">Introduce los datos de acceso de tu proveedor</p>
+          <h3 id="modalTitle" class="text-base sm:text-lg font-semibold text-[#f4f6f9]">Gestor de Cuentas IPTV</h3>
+          <p id="modalSubtitle" class="text-xs text-[#9aa4b2]">Cambia de cuenta al instante o añade una nueva</p>
         </div>
         <button class="close-modal-btn min-w-[40px] min-h-[40px] flex items-center justify-center text-[#9aa4b2] hover:text-white rounded-lg focusable">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
         </button>
       </div>
 
-      <div class="p-6 overflow-y-auto">
-        <div id="loginError" class="mb-4 p-3 rounded-lg bg-red-950/50 border border-red-900/60 text-red-300 text-xs hidden"></div>
-
-        <form id="loginForm" class="space-y-4">
-          <div>
-            <label class="block text-xs font-medium text-[#9aa4b2] mb-1.5">Nombre de la lista (opcional)</label>
-            <input type="text" id="loginName" placeholder="Mi Lista IPTV" class="form-input focusable">
-          </div>
-          <div>
-            <label class="block text-xs font-medium text-[#9aa4b2] mb-1.5">Servidor / Host URL</label>
-            <input type="text" id="loginServer" required placeholder="http://servidor-iptv.com:8080" class="form-input focusable">
-          </div>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label class="block text-xs font-medium text-[#9aa4b2] mb-1.5">Usuario</label>
-              <input type="text" id="loginUser" required placeholder="usuario" class="form-input focusable">
-            </div>
-            <div>
-              <label class="block text-xs font-medium text-[#9aa4b2] mb-1.5">Contraseña</label>
-              <input type="password" id="loginPass" required placeholder="••••••••" class="form-input focusable">
-            </div>
+      <div class="p-6 overflow-y-auto max-h-[75vh]">
+        
+        <!-- VIEW A: SAVED PROFILES LIST -->
+        <div id="profilesListView" class="space-y-4">
+          <div id="savedProfilesList" class="space-y-2.5">
+            <!-- Dynamically populated by app.js -->
           </div>
 
-          <button type="submit" id="loginSubmitBtn" class="w-full min-h-[44px] py-2.5 px-4 rounded-lg font-semibold text-sm bg-sky-500 hover:bg-sky-400 text-[#090b0f] transition-colors focusable">
-            Conectar Lista Xtream
-          </button>
-        </form>
+          <div class="pt-3 border-t border-white/[0.08] flex flex-col gap-2">
+            <button id="showAddAccountBtn" class="w-full min-h-[44px] py-2.5 px-4 rounded-xl font-semibold text-sm bg-sky-500 hover:bg-sky-400 text-[#090b0f] transition-all flex items-center justify-center gap-2 focusable shadow-lg shadow-sky-500/20">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+              <span>+ Añadir Otra Cuenta IPTV</span>
+            </button>
 
-        <div class="mt-5 pt-5 border-t border-white/[0.08] flex flex-col items-center">
-          <button id="demoModeBtn" class="w-full min-h-[42px] py-2 px-4 rounded-lg text-xs font-medium bg-[#161a22] hover:bg-[#1c212c] text-[#f4f6f9] border border-white/[0.08] transition-colors focusable">
-            Probar con canales gratuitos de muestra (Demo)
-          </button>
-        </div>
-
-        <div class="mt-5 pt-4 border-t border-white/[0.08]">
-          <h4 class="text-[11px] font-semibold text-[#647082] uppercase tracking-wider mb-2.5">Cuentas guardadas</h4>
-          <div id="savedProfilesList" class="space-y-1.5">
-            <!-- Injected by app.js -->
+            <button id="demoModeBtn" class="w-full min-h-[40px] py-2 px-4 rounded-lg text-xs font-medium bg-[#161a22] hover:bg-[#1c212c] text-[#9aa4b2] hover:text-[#f4f6f9] border border-white/[0.08] transition-colors focusable">
+              Probar Canales de Muestra Gratuitos (Demo)
+            </button>
           </div>
         </div>
+
+        <!-- VIEW B: ADD / EDIT ACCOUNT FORM -->
+        <div id="profileFormView" class="hidden space-y-4">
+          <div class="flex items-center justify-between pb-1">
+            <button id="backToProfilesBtn" type="button" class="text-xs font-semibold text-sky-400 hover:text-sky-300 flex items-center gap-1.5 transition-colors focusable">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18"/></svg>
+              <span>Volver a mis cuentas</span>
+            </button>
+            <span id="formModeLabel" class="text-xs font-medium text-slate-400">Nueva Cuenta</span>
+          </div>
+
+          <!-- M3U Quick Paste Helper -->
+          <div class="p-3 rounded-xl bg-sky-500/10 border border-sky-500/20 space-y-1.5">
+            <label class="block text-[11px] font-semibold text-sky-300 uppercase tracking-wider">¿Tienes un enlace M3U completo?</label>
+            <div class="flex gap-2">
+              <input type="text" id="m3uPasteInput" placeholder="Pega aquí el enlace http://servidor/get.php?username=...&password=..." class="w-full text-xs bg-[#101319] border border-sky-500/30 rounded-lg px-2.5 py-1.5 text-white placeholder-slate-500 focus:outline-none focus:border-sky-400 font-mono">
+              <button id="applyM3uBtn" type="button" class="shrink-0 px-3 py-1.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-xs font-bold text-black transition-colors">
+                Rellenar
+              </button>
+            </div>
+            <p class="text-[10px] text-slate-400">Extrae automáticamente el host, usuario y contraseña de cualquier URL M3U.</p>
+          </div>
+
+          <div id="loginError" class="p-3 rounded-lg bg-red-950/50 border border-red-900/60 text-red-300 text-xs hidden"></div>
+
+          <form id="loginForm" class="space-y-3.5">
+            <input type="hidden" id="editProfileId" value="">
+            <div>
+              <label class="block text-xs font-medium text-[#9aa4b2] mb-1">Nombre para esta cuenta</label>
+              <input type="text" id="loginName" placeholder="Ej: Cuenta Principal, Familia, Deportes..." class="form-input focusable">
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-[#9aa4b2] mb-1">Servidor / Host URL (Xtream Codes)</label>
+              <input type="text" id="loginServer" required placeholder="http://servidor-iptv.com:8080" class="form-input focusable">
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-medium text-[#9aa4b2] mb-1">Usuario</label>
+                <input type="text" id="loginUser" required placeholder="usuario" class="form-input focusable">
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-[#9aa4b2] mb-1">Contraseña</label>
+                <input type="password" id="loginPass" required placeholder="••••••••" class="form-input focusable">
+              </div>
+            </div>
+
+            <button type="submit" id="loginSubmitBtn" class="w-full min-h-[44px] py-2.5 px-4 rounded-xl font-semibold text-sm bg-sky-500 hover:bg-sky-400 text-[#090b0f] transition-all focusable shadow-lg shadow-sky-500/20">
+              Guardar y Conectar Cuenta
+            </button>
+          </form>
+        </div>
+
       </div>
     </div>
   </div>

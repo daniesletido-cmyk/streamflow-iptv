@@ -48,7 +48,17 @@ const Api = {
 
   cleanUrl(url) {
     if (!url) return '';
-    let cleaned = url.trim().replace(/\/+$/, '');
+    let cleaned = url.trim();
+    if (!cleaned.startsWith('http://') && !cleaned.startsWith('https://')) {
+      cleaned = 'http://' + cleaned;
+    }
+    const qIdx = cleaned.indexOf('?');
+    if (qIdx !== -1) {
+      cleaned = cleaned.substring(0, qIdx);
+    }
+    cleaned = cleaned.replace(/\/(player_api|panel_api|get)\.php.*$/i, '');
+    cleaned = cleaned.replace(/\/(c|stalker_portal|live|movie|series)\/?$/i, '');
+    cleaned = cleaned.replace(/\/+$/, '');
     if (cleaned.includes('westream.sbs')) {
       cleaned = cleaned.replace('westream.sbs', '81.31.194.120');
     }

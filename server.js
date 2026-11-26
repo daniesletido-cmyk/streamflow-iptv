@@ -79,10 +79,20 @@ app.get('/api/ios-dns-profile', (req, res) => {
 
 function cleanServerUrl(rawUrl) {
   let url = (rawUrl || '').trim();
+  if (!url) return '';
   if (!url.startsWith('http://') && !url.startsWith('https://')) {
     url = 'http://' + url;
   }
+  // Strip any query parameters (e.g. if an M3U URL with ?username= was pasted)
+  const qIdx = url.indexOf('?');
+  if (qIdx !== -1) {
+    url = url.substring(0, qIdx);
+  }
+  // Remove known endpoint suffixes and trailing paths that cause HTTP 404
+  url = url.replace(/\/(player_api|panel_api|get)\.php.*$/i, '');
+  url = url.replace(/\/(c|stalker_portal|live|movie|series)\/?$/i, '');
   url = url.replace(/\/+$/, '');
+  
   // Map known ISP-blocked domains to their direct IP to bypass Spanish ISP DPI blocks (HTTP 451)
   if (url.includes('westream.sbs')) {
     url = url.replace('westream.sbs', '81.31.194.120');
@@ -99,43 +109,94 @@ app.get('/api/info', (req, res) => {
   });
 });
 
-// Server-Side Persistent Profile Management (Permanent Storage across devices & restarts)
+// Server-Side Persistent Multi-Profile Management
 const fs = require('fs');
-let inMemoryProfile = null;
-const PROFILE_FILE = process.env.VERCEL 
+let inMemoryProfiles = null;
+const PROFILES_FILE = process.env.VERCEL 
+  ? path.join('/tmp', 'streamflow_saved_profiles.json') 
+  : path.join(__dirname, 'streamflow_saved_profiles.json');
+
+const LEGACY_PROFILE_FILE = process.env.VERCEL 
   ? path.join('/tmp', 'streamflow_saved_profile.json') 
   : path.join(__dirname, 'streamflow_saved_profile.json');
 
-function readServerProfile() {
-  if (inMemoryProfile) return inMemoryProfile;
+function readServerProfiles() {
+  if (inMemoryProfiles && Array.isArray(inMemoryProfiles)) return inMemoryProfiles;
   try {
-    if (fs.existsSync(PROFILE_FILE)) {
-      const data = JSON.parse(fs.readFileSync(PROFILE_FILE, 'utf8'));
-      inMemoryProfile = data;
-      return data;
+    if (fs.existsSync(PROFILES_FILE)) {
+      const data = JSON.parse(fs.readFileSync(PROFILES_FILE, 'utf8'));
+      if (Array.isArray(data)) {
+        inMemoryProfiles = data;
+        return data;
+      }
     }
   } catch (e) {}
-  return null;
+
+  // Fallback to legacy single-profile file
+  try {
+    if (fs.existsSync(LEGACY_PROFILE_FILE)) {
+      const single = JSON.parse(fs.readFileSync(LEGACY_PROFILE_FILE, 'utf8'));
+      if (single && single.username) {
+        const list = [single];
+        inMemoryProfiles = list;
+        return list;
+      }
+    }
+  } catch (e) {}
+
+  inMemoryProfiles = [];
+  return [];
 }
 
-function writeServerProfile(profile) {
-  inMemoryProfile = profile;
+function writeServerProfiles(profiles) {
+  inMemoryProfiles = profiles;
   try {
-    fs.writeFileSync(PROFILE_FILE, JSON.stringify(profile, null, 2), 'utf8');
+    fs.writeFileSync(PROFILES_FILE, JSON.stringify(profiles, null, 2), 'utf8');
+    if (profiles.length > 0) {
+      fs.writeFileSync(LEGACY_PROFILE_FILE, JSON.stringify(profiles[0], null, 2), 'utf8');
+    }
   } catch (e) {
-    console.error('Error escribiendo perfil en servidor:', e.message);
+    console.error('Error escribiendo perfiles en servidor:', e.message);
   }
 }
 
+// Multi-profile endpoints
+app.get('/api/saved-profiles', (req, res) => {
+  const profiles = readServerProfiles();
+  return res.json({ success: true, profiles });
+});
+
+app.post('/api/saved-profiles', (req, res) => {
+  const { profiles, activeId } = req.body || {};
+  if (Array.isArray(profiles)) {
+    writeServerProfiles(profiles);
+    const active = profiles.find(p => p.id === activeId) || profiles[0];
+    if (active) {
+      const cookieVal = encodeURIComponent(JSON.stringify(active));
+      res.setHeader('Set-Cookie', `streamflow_active_profile=${cookieVal}; Path=/; Max-Age=315360000; SameSite=Lax`);
+    }
+    return res.json({ success: true, saved: true, count: profiles.length });
+  }
+  return res.json({ success: false, error: 'Lista de perfiles inválida' });
+});
+
+// Backward compatibility single-profile endpoints
 app.get('/api/saved-profile', (req, res) => {
-  const profile = readServerProfile();
-  return res.json({ success: true, profile: profile || null });
+  const profiles = readServerProfiles();
+  return res.json({ success: true, profile: profiles[0] || null });
 });
 
 app.post('/api/saved-profile', (req, res) => {
   const { profile } = req.body || {};
   if (profile && profile.username && profile.password) {
-    writeServerProfile(profile);
+    const profiles = readServerProfiles();
+    const idx = profiles.findIndex(p => p.id === profile.id || (p.username === profile.username && p.serverUrl === profile.serverUrl));
+    if (idx >= 0) {
+      profiles[idx] = { ...profiles[idx], ...profile };
+    } else {
+      profiles.push(profile);
+    }
+    writeServerProfiles(profiles);
     const cookieVal = encodeURIComponent(JSON.stringify(profile));
     res.setHeader('Set-Cookie', `streamflow_active_profile=${cookieVal}; Path=/; Max-Age=315360000; SameSite=Lax`);
     return res.json({ success: true, saved: true });
@@ -148,34 +209,93 @@ app.post('/api/login', async (req, res) => {
   try {
     const { serverUrl, username, password } = req.body;
     if (!serverUrl || !username || !password) {
-      return res.status(400).json({ success: false, error: 'Faltan parámetros requeridos.' });
+      return res.status(400).json({ success: false, error: 'Faltan parámetros requeridos (Servidor, Usuario o Contraseña).' });
     }
 
-    const base = cleanServerUrl(serverUrl);
-    const targetUrl = `${base}/player_api.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
+    let base = cleanServerUrl(serverUrl);
 
-    console.log(`[LOGIN] Verificando cuenta en: ${base} para usuario: ${username}`);
+    async function tryFetchAuth(baseUrl) {
+      const targetUrl = `${baseUrl}/player_api.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
+      console.log(`[LOGIN] Intentando conexión en: ${targetUrl}`);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 12000);
+      try {
+        const resp = await fetch(targetUrl, {
+          headers: { 'User-Agent': 'IPTVSmartersPro/2.2.1 (Linux; Android 10)' },
+          signal: controller.signal
+        });
+        clearTimeout(timeout);
+        return { resp, url: targetUrl, base: baseUrl };
+      } catch (err) {
+        clearTimeout(timeout);
+        throw err;
+      }
+    }
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 12000);
+    let result = null;
+    let lastError = null;
 
-    const resp = await fetch(targetUrl, {
-      headers: { 'User-Agent': 'IPTVSmartersPro/2.2.1 (Linux; Android 10)' },
-      signal: controller.signal
-    });
-    clearTimeout(timeout);
+    try {
+      result = await tryFetchAuth(base);
+    } catch (e) {
+      lastError = e;
+      // If HTTPS failed (e.g. SSL error on raw IPTV ports), try HTTP automatically
+      if (base.startsWith('https://')) {
+        const httpBase = 'http://' + base.slice(8);
+        try {
+          console.log(`[LOGIN] Falló HTTPS, reintentando con HTTP en: ${httpBase}`);
+          result = await tryFetchAuth(httpBase);
+          base = httpBase;
+        } catch (e2) {}
+      }
+    }
+
+    // If 404 on player_api.php, try panel_api.php
+    if (result && result.resp && result.resp.status === 404) {
+      try {
+        const altUrl = `${base}/panel_api.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
+        console.log(`[LOGIN] 404 detectado. Intentando endpoint alternativo: ${altUrl}`);
+        const altController = new AbortController();
+        const altTimeout = setTimeout(() => altController.abort(), 8000);
+        const altResp = await fetch(altUrl, {
+          headers: { 'User-Agent': 'IPTVSmartersPro/2.2.1 (Linux; Android 10)' },
+          signal: altController.signal
+        });
+        clearTimeout(altTimeout);
+        if (altResp.ok) {
+          result = { resp: altResp, url: altUrl, base };
+        }
+      } catch (e3) {}
+    }
+
+    if (!result || !result.resp) {
+      return res.status(500).json({ 
+        success: false, 
+        error: 'No se pudo conectar con el servidor: ' + (lastError ? lastError.message : 'Tiempo de espera agotado') 
+      });
+    }
+
+    const { resp } = result;
 
     if (!resp.ok) {
-      return res.status(resp.status).json({ success: false, error: `Error del servidor: HTTP ${resp.status}` });
+      let friendlyError = `Error del servidor: HTTP ${resp.status}`;
+      if (resp.status === 404) {
+        friendlyError = 'Servidor respondió HTTP 404 (No encontrado). Verifica la URL del servidor (ejemplo: http://servidor.com:8080 sin rutas extras).';
+      } else if (resp.status === 401 || resp.status === 403) {
+        friendlyError = 'Acceso denegado (HTTP ' + resp.status + '). Revisa que tu usuario y contraseña sean correctos.';
+      } else if (resp.status === 451) {
+        friendlyError = 'Bloqueo legal/operador (HTTP 451). Activa el modo proxy en Ajustes para reproducir.';
+      }
+      return res.status(resp.status).json({ success: false, error: friendlyError });
     }
 
     const data = await resp.json();
     if (data.user_info && data.user_info.auth === 0) {
-      return res.status(401).json({ success: false, error: 'Credenciales inválidas según el proveedor.' });
+      return res.status(401).json({ success: false, error: 'Credenciales inválidas según el proveedor (Usuario o Contraseña incorrectos).' });
     }
 
     apiCache.clear();
-    return res.json({ success: true, data });
+    return res.json({ success: true, data, serverUrl: base });
   } catch (err) {
     console.error('[LOGIN ERROR]', err.message);
     return res.status(500).json({ success: false, error: 'Error de conexión: ' + err.message });
