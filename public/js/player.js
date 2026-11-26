@@ -350,6 +350,7 @@ class StreamPlayer {
         }
         if (urls.proxiedDirectLive) {
           list.push({ engine: 'native', url: urls.proxiedDirectLive, label: 'Nativo Fallback' });
+          list.push({ engine: 'mpegts', url: urls.proxiedDirectLive + '&transcode=aac', label: 'MPEG-TS Audio AAC (Compat)' });
         }
       }
     } else {
@@ -734,7 +735,7 @@ class StreamPlayer {
     if (titleEl) titleEl.textContent = item.name || 'Canal';
     
     if (logoEl) {
-      if (item.stream_icon) {
+      if (item.stream_icon && /^https?:\/\//i.test(item.stream_icon)) {
         logoEl.src = item.stream_icon;
         logoEl.classList.remove('hidden');
       } else {

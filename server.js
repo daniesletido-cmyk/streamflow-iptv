@@ -617,10 +617,63 @@ function handleStreamProxy(rawTargetUrl, req, res, redirectDepth = 0) {
   proxyReq.end();
 }
 
+const { spawn, execSync } = require('child_process');
+
+// Detect local FFmpeg binary once at startup (for AC3/EAC3 -> AAC audio remux on PC)
+let FFMPEG_PATH = null;
+if (!process.env.VERCEL) {
+  try {
+    const found = execSync('where.exe ffmpeg', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().split(/\r?\n/)[0].trim();
+    if (found && fs.existsSync(found)) FFMPEG_PATH = found;
+  } catch (e) {}
+}
+
+function handleFfmpegAacProxy(targetUrl, req, res) {
+  if (!FFMPEG_PATH) {
+    return handleStreamProxy(targetUrl, req, res, 0);
+  }
+  const cleanUrl = sanitizeStreamUrl(targetUrl);
+  console.log(`[FFMPEG AAC REMUX] Iniciando para: ${cleanUrl}`);
+
+  res.writeHead(200, {
+    'Content-Type': 'video/mp2t',
+    'Access-Control-Allow-Origin': '*',
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'X-Accel-Buffering': 'no'
+  });
+
+  const ff = spawn(FFMPEG_PATH, [
+    '-user_agent', 'IPTVSmartersPro/2.2.1 (Linux; Android 10)',
+    '-reconnect', '1',
+    '-reconnect_streamed', '1',
+    '-reconnect_delay_max', '3',
+    '-i', cleanUrl,
+    '-c:v', 'copy',
+    '-c:a', 'aac',
+    '-ac', '2',
+    '-b:a', '192k',
+    '-f', 'mpegts',
+    'pipe:1'
+  ], { stdio: ['ignore', 'pipe', 'ignore'] });
+
+  ff.stdout.pipe(res);
+
+  const cleanup = () => {
+    try { ff.kill('SIGKILL'); } catch (e) {}
+  };
+  req.on('close', cleanup);
+  req.on('aborted', cleanup);
+  res.on('close', cleanup);
+  ff.on('error', cleanup);
+}
+
 app.get('/api/stream/proxy', (req, res) => {
   const targetUrl = req.query.url;
   if (!targetUrl) {
     return res.status(400).send('Falta el parámetro url');
+  }
+  if (req.query.transcode === 'aac' && FFMPEG_PATH) {
+    return handleFfmpegAacProxy(targetUrl, req, res);
   }
   handleStreamProxy(targetUrl, req, res, 0);
 });

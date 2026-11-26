@@ -773,7 +773,8 @@ const App = {
       const isFav = Storage.isFavorite(targetId);
       const isWatched = Storage.isWatched(targetId);
       const inProgress = Storage.getPlaybackProgress(targetId);
-      const poster = item.stream_icon || item.cover || '';
+      const rawPoster = item.stream_icon || item.cover || '';
+      const poster = /^https?:\/\//i.test(rawPoster) ? rawPoster : '';
 
       const card = document.createElement('div');
       card.className = 'stream-card group focusable';
