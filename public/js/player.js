@@ -33,6 +33,8 @@ class StreamPlayer {
     this.resumeTime = null;
     this.isSeeking = false;
     this.videoFrameCallbackId = null;
+    this.isCleaningUp = false;
+    this.hlsRecoverAttempts = 0;
 
     this.initEvents();
   }
@@ -92,14 +94,11 @@ class StreamPlayer {
     });
 
     this.video.addEventListener('error', (e) => {
+      if (this.isCleaningUp || !this.currentItem) return;
       console.warn('[Player] Video element error:', e);
       const mediaErr = this.video.error;
-      if (mediaErr && (mediaErr.code === 3 || mediaErr.code === 4)) {
-        // Codec decode error or format unsupported (e.g. AC3/EAC3 Dolby audio)
-        this.showExternalPlayerFallback('Formato de audio o vídeo no soportado en navegador (ej. Dolby AC3).');
-      } else {
-        this.tryNextFallbackStrategy('Error en elemento de vídeo');
-      }
+      const errCode = mediaErr ? mediaErr.code : 0;
+      this.tryNextFallbackStrategy(`Error de reproducción (código ${errCode})`);
     });
 
     this.video.addEventListener('timeupdate', () => {
@@ -300,19 +299,37 @@ class StreamPlayer {
   buildPlaybackStrategies(urls, streamType) {
     const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
     const canNative = this.video.canPlayType('application/vnd.apple.mpegurl');
+    const isVercel = typeof window !== 'undefined' && window.location.hostname.includes('vercel.app');
     const list = [];
 
     if (streamType === 'live') {
       if (isIos || (canNative && !window.Hls?.isSupported())) {
-        // iOS Safari / iPad: Proxied stream first (handles 302 redirects and prevents CORS), then direct
-        if (urls.proxiedDirectLive) list.push({ engine: 'native', url: urls.proxiedDirectLive, label: 'iOS TS Proxied' });
-        if (urls.proxiedHls) list.push({ engine: 'native', url: urls.proxiedHls, label: 'iOS HLS Proxied' });
-        if (urls.proxiedDirect) list.push({ engine: 'native', url: urls.proxiedDirect, label: 'iOS Direct Proxied' });
-        if (urls.directLive) list.push({ engine: 'native', url: urls.directLive, label: 'iOS TS Directo' });
-        if (urls.hls) list.push({ engine: 'native', url: urls.hls, label: 'iOS HLS Directo' });
+        // iOS Safari / iPad: HLS first on Vercel, TS proxied on LAN
+        if (isVercel) {
+          if (urls.proxiedHls) list.push({ engine: 'native', url: urls.proxiedHls, label: 'iOS HLS Proxied' });
+          if (urls.hls) list.push({ engine: 'native', url: urls.hls, label: 'iOS HLS Directo' });
+          if (urls.proxiedDirectLive) list.push({ engine: 'native', url: urls.proxiedDirectLive, label: 'iOS TS Proxied' });
+        } else {
+          if (urls.proxiedDirectLive) list.push({ engine: 'native', url: urls.proxiedDirectLive, label: 'iOS TS Proxied' });
+          if (urls.proxiedHls) list.push({ engine: 'native', url: urls.proxiedHls, label: 'iOS HLS Proxied' });
+          if (urls.proxiedDirect) list.push({ engine: 'native', url: urls.proxiedDirect, label: 'iOS Direct Proxied' });
+          if (urls.directLive) list.push({ engine: 'native', url: urls.directLive, label: 'iOS TS Directo' });
+          if (urls.hls) list.push({ engine: 'native', url: urls.hls, label: 'iOS HLS Directo' });
+        }
+      } else if (isVercel) {
+        // Vercel Serverless: Prioritize HLS (.m3u8 segments) so serverless proxy never hits infinite-stream timeouts
+        if (window.Hls && Hls.isSupported()) {
+          if (urls.proxiedHls) list.push({ engine: 'hls', url: urls.proxiedHls, label: 'HLS Live (Fluido)' });
+          if (urls.hls) list.push({ engine: 'hls', url: urls.hls, label: 'HLS Directo' });
+        }
+        if (window.mpegts && mpegts.getFeatureList().mseLivePlayback) {
+          if (urls.directLive) list.push({ engine: 'mpegts', url: urls.directLive, label: 'MPEG-TS Directo' });
+          if (urls.proxiedDirectLive) list.push({ engine: 'mpegts', url: urls.proxiedDirectLive, label: 'MPEG-TS Proxied' });
+          if (urls.proxiedDirect) list.push({ engine: 'mpegts', url: urls.proxiedDirect, label: 'MPEG-TS Direct Proxied' });
+        }
+        if (urls.proxiedHls) list.push({ engine: 'native', url: urls.proxiedHls, label: 'Nativo HLS' });
       } else {
-        // PC & Android Chrome/Edge:
-        // Strategy 1: mpegts.js with /live/ TS stream (official Xtream Codes standard)
+        // PC Desktop (.exe / localhost) & LAN: Local Node proxy supports infinite MPEG-TS & HLS seamlessly
         if (window.mpegts && mpegts.getFeatureList().mseLivePlayback) {
           if (urls.proxiedDirectLive) {
             list.push({ engine: 'mpegts', url: urls.proxiedDirectLive, label: 'MPEG-TS Live (/live/...)' });
@@ -320,23 +337,17 @@ class StreamPlayer {
           if (urls.proxiedDirect) {
             list.push({ engine: 'mpegts', url: urls.proxiedDirect, label: 'MPEG-TS Direct' });
           }
-          if (urls.directLive) {
-            list.push({ engine: 'mpegts', url: urls.directLive, label: 'MPEG-TS Directo sin proxy' });
-          }
         }
-
-        // Strategy 2: Hls.js with M3U8
         if (window.Hls && Hls.isSupported()) {
           if (urls.proxiedHls) list.push({ engine: 'hls', url: urls.proxiedHls, label: 'HLS Playlist Proxied' });
           if (urls.hls) list.push({ engine: 'hls', url: urls.hls, label: 'HLS Playlist Directa' });
         }
-
-        // Strategy 3: Raw bare stream
+        if (window.mpegts && mpegts.getFeatureList().mseLivePlayback && urls.directLive) {
+          list.push({ engine: 'mpegts', url: urls.directLive, label: 'MPEG-TS Directo sin proxy' });
+        }
         if (window.mpegts && mpegts.getFeatureList().mseLivePlayback && urls.proxiedBare) {
           list.push({ engine: 'mpegts', url: urls.proxiedBare, label: 'MPEG-TS Raw' });
         }
-
-        // Strategy 4: Native video element fallback
         if (urls.proxiedDirectLive) {
           list.push({ engine: 'native', url: urls.proxiedDirectLive, label: 'Nativo Fallback' });
         }
@@ -402,14 +413,14 @@ class StreamPlayer {
     }, {
       enableWorker: true,
       lazyLoad: false,
-      liveBufferLatencyChasing: true,
-      liveBufferLatencyMaxLatency: 3.5,
-      liveBufferLatencyMinRemain: 1.0,
+      liveBufferLatencyChasing: false, // Prevents premature buffer-starvation seeks at 1s
+      liveBufferLatencyMaxLatency: 8.0,
+      liveBufferLatencyMinRemain: 2.5,
       enableStashBuffer: true,
-      stashInitialSize: 128 * 1024, // 128KB for sub-1.5s fast zapping
+      stashInitialSize: 256 * 1024, // 256KB for stable keyframe lock without stutter
       autoCleanupSourceBuffer: true,
-      autoCleanupMaxBackwardDuration: 30,
-      autoCleanupMinBackwardDuration: 15,
+      autoCleanupMaxBackwardDuration: 45,
+      autoCleanupMinBackwardDuration: 20,
       fixAudioTimestampGap: true,
       accurateSeek: false
     });
@@ -423,22 +434,29 @@ class StreamPlayer {
     }
 
     this.mpegtsPlayer.on(mpegts.Events.ERROR, (errorType, errorDetail) => {
+      if (this.isCleaningUp) return;
       console.warn('mpegts error:', errorType, errorDetail);
       this.tryNextFallbackStrategy(`MpegTS Error: ${errorType}`);
     });
   }
 
   loadWithHls(url) {
+    this.hlsRecoverAttempts = 0;
     this.hls = new Hls({
       enableWorker: true,
-      lowLatencyMode: true,
+      lowLatencyMode: false, // Standard HLS buffering prevents 1s micro-stutters on IPTV
       backBufferLength: 30,
-      maxBufferLength: 15, // Starts fast, expands to 30 after start
-      maxMaxBufferLength: 30,
-      fragLoadingTimeOut: 10000,
-      manifestLoadingTimeOut: 10000,
+      maxBufferLength: 30,
+      maxMaxBufferLength: 60,
+      maxBufferHole: 1.5, // Smoothly bridges minor IPTV TS timestamp gaps
+      nudgeOffset: 0.2,
+      nudgeMaxRetry: 5,
+      fragLoadingTimeOut: 15000,
+      fragLoadingMaxRetry: 4,
+      manifestLoadingTimeOut: 15000,
+      manifestLoadingMaxRetry: 3,
       liveSyncDurationCount: 3,
-      liveMaxLatencyDurationCount: 6
+      liveMaxLatencyDurationCount: 8
     });
 
     this.hls.loadSource(url);
@@ -449,10 +467,24 @@ class StreamPlayer {
     });
 
     this.hls.on(Hls.Events.ERROR, (event, data) => {
-      if (data.fatal) {
-        console.warn('Hls fatal error:', data.type);
-        this.tryNextFallbackStrategy(`Hls Error: ${data.type}`);
+      if (this.isCleaningUp || !data.fatal) return;
+      console.warn('Hls fatal error:', data.type, data.details);
+
+      if (this.hlsRecoverAttempts < 2) {
+        this.hlsRecoverAttempts++;
+        if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+          console.log('[HLS] Intentando recuperar red...');
+          this.hls.startLoad();
+          return;
+        }
+        if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+          console.log('[HLS] Intentando recuperar decodificación...');
+          this.hls.recoverMediaError();
+          return;
+        }
       }
+
+      this.tryNextFallbackStrategy(`Hls Error: ${data.type}`);
     });
   }
 
@@ -538,7 +570,7 @@ class StreamPlayer {
   showExternalPlayerFallback(reason) {
     this.showBuffering(reason);
     this.showBufferingActions();
-    this.openExternalPlayerModal();
+    // Never auto-open the modal popup; let the user click the button if they want an external player
   }
 
   startWatchdog() {
@@ -556,14 +588,18 @@ class StreamPlayer {
         return;
       }
 
-      // If playing live TV and currentTime has not advanced by at least 0.1s
+      // If currentTime has not advanced by at least 0.1s
       if (Math.abs(this.video.currentTime - this.lastTime) < 0.1) {
         this.stalledSeconds += 1.5;
-        if (this.stalledSeconds >= 4.0) {
-          console.warn('[Watchdog] Stream congelado durante >4s. Auto-recuperando...');
+        if (this.stalledSeconds >= 7.5) {
+          console.warn('[Watchdog] Stream congelado durante >7.5s. Auto-recuperando...');
           this.showBuffering('Recuperando señal...');
           this.stalledSeconds = 0;
-          this.tryNextFallbackStrategy('Watchdog stall recovery');
+          if (this.hls) {
+            try { this.hls.startLoad(); } catch (e) {}
+          } else {
+            this.tryNextFallbackStrategy('Watchdog stall recovery');
+          }
         }
       } else {
         this.stalledSeconds = 0;
@@ -580,6 +616,7 @@ class StreamPlayer {
   }
 
   cleanupEngines() {
+    this.isCleaningUp = true;
     this.clearConnectionTimeout();
     this.hideBufferingActions();
 
@@ -609,6 +646,8 @@ class StreamPlayer {
       this.video.removeAttribute('src');
       this.video.load();
     } catch (e) {}
+
+    setTimeout(() => { this.isCleaningUp = false; }, 50);
   }
 
   stop() {
